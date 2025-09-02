@@ -1,0 +1,6 @@
+adaptive_noise: true
+adaptive_strategy: gradient
+alpha_method: dithering
+alpha_threshold: 0.5
+color_distance: ciede2000
+noise_strength: 0.5
