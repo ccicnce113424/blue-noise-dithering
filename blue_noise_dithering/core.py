@@ -128,60 +128,70 @@ class BlueNoiseDitherer:
             self._save_noise_strength_map(noise_strength_map, self.output_noise_map)
         
         # Process pixels in chunks for memory efficiency
-        chunk_size = 1000  # Process 1000 pixels at a time
+        chunk_size = 10000  # Increased from 1000 to 10000 pixels at a time for better performance
         total_pixels = height * width
         processed_pixels = 0
+        
+        # Process pixels in chunks for memory efficiency and better performance
+        chunk_size = 10000  # Process 10000 pixels at a time for better performance
+        total_pixels = height * width
+        processed_pixels = 0
+        
+        # Flatten arrays for chunk processing
+        flat_rgb = image_array[:, :, :3].reshape(-1, 3)
+        flat_alpha = image_array[:, :, 3].reshape(-1)
+        flat_noise = noise_texture.reshape(-1)
+        flat_strength = noise_strength_map.reshape(-1)
+        
+        output_rgb = np.zeros((total_pixels, 3), dtype=np.uint8)
+        output_alpha = np.zeros(total_pixels, dtype=np.uint8)
         
         with tqdm(total=total_pixels, desc="Dithering", unit="px", 
                  disable=progress_callback is None) as pbar:
             
-            for y in range(height):
-                # Get row data
-                row_rgb = image_array[y, :, :3]  # RGB
-                row_alpha = image_array[y, :, 3]  # Alpha
-                row_noise = noise_texture[y, :]
-                row_strength = noise_strength_map[y, :]
+            for start_idx in range(0, total_pixels, chunk_size):
+                end_idx = min(start_idx + chunk_size, total_pixels)
+                chunk_size_actual = end_idx - start_idx
                 
-                # Process in chunks
-                for x_start in range(0, width, chunk_size):
-                    x_end = min(x_start + chunk_size, width)
-                    chunk_size_actual = x_end - x_start
-                    
-                    # Extract chunk data
-                    chunk_rgb = row_rgb[x_start:x_end]
-                    chunk_alpha = row_alpha[x_start:x_end]
-                    chunk_noise = row_noise[x_start:x_end]
-                    chunk_strength = row_strength[x_start:x_end]
-                    
-                    # Apply blue noise to RGB
-                    noise_offset = (chunk_noise - 0.5) * 2.0  # Convert to -1 to 1 range
-                    noise_scale = chunk_strength.reshape(-1, 1) * 50.0  # Scale noise
-                    
-                    noisy_rgb = chunk_rgb + noise_offset.reshape(-1, 1) * noise_scale
-                    noisy_rgb = np.clip(noisy_rgb, 0, 255)
-                    
-                    # Find closest palette colors
-                    palette_indices = self._find_closest_colors(noisy_rgb)
-                    chunk_output_rgb = self.palette[palette_indices]
-                    
-                    # Handle alpha channel
-                    if self.alpha_method == 'threshold':
-                        chunk_output_alpha = self._apply_alpha_threshold(chunk_alpha)
-                    else:  # dithering
-                        chunk_output_alpha = self._apply_alpha_dithering(
-                            chunk_alpha, chunk_noise, chunk_strength
-                        )
-                    
-                    # Store results
-                    output_array[y, x_start:x_end, :3] = chunk_output_rgb
-                    output_array[y, x_start:x_end, 3] = chunk_output_alpha
-                    
-                    processed_pixels += chunk_size_actual
-                    
-                    if progress_callback:
-                        progress_callback(processed_pixels / total_pixels)
-                    
-                    pbar.update(chunk_size_actual)
+                # Extract chunk data
+                chunk_rgb = flat_rgb[start_idx:end_idx]
+                chunk_alpha = flat_alpha[start_idx:end_idx]
+                chunk_noise = flat_noise[start_idx:end_idx]
+                chunk_strength = flat_strength[start_idx:end_idx]
+                
+                # Apply blue noise to RGB
+                noise_offset = (chunk_noise - 0.5) * 2.0  # Convert to -1 to 1 range
+                noise_scale = chunk_strength.reshape(-1, 1) * 50.0  # Scale noise
+                
+                noisy_rgb = chunk_rgb + noise_offset.reshape(-1, 1) * noise_scale
+                noisy_rgb = np.clip(noisy_rgb, 0, 255)
+                
+                # Find closest palette colors
+                palette_indices = self._find_closest_colors(noisy_rgb)
+                chunk_output_rgb = self.palette[palette_indices]
+                
+                # Handle alpha channel
+                if self.alpha_method == 'threshold':
+                    chunk_output_alpha = self._apply_alpha_threshold(chunk_alpha)
+                else:  # dithering
+                    chunk_output_alpha = self._apply_alpha_dithering(
+                        chunk_alpha, chunk_noise, chunk_strength
+                    )
+                
+                # Store results
+                output_rgb[start_idx:end_idx] = chunk_output_rgb
+                output_alpha[start_idx:end_idx] = chunk_output_alpha
+                
+                processed_pixels += chunk_size_actual
+                
+                if progress_callback:
+                    progress_callback(processed_pixels / total_pixels)
+                
+                pbar.update(chunk_size_actual)
+        
+        # Reshape back to image dimensions
+        output_array[:, :, :3] = output_rgb.reshape(height, width, 3)
+        output_array[:, :, 3] = output_alpha.reshape(height, width)
         
         return Image.fromarray(output_array, 'RGBA')
     
