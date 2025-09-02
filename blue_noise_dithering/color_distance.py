@@ -3,10 +3,8 @@
 import numpy as np
 from typing import Tuple, Union
 import colorspacious
-from concurrent.futures import ThreadPoolExecutor
 import math
 import scipy.ndimage
-from skimage import filters, feature
 from tqdm import tqdm
 try:
     import colour
