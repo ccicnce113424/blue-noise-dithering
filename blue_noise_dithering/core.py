@@ -487,8 +487,8 @@ class BlueNoiseDitherer:
         max_rgb = np.max(rgb_norm, axis=2)
         min_rgb = np.min(rgb_norm, axis=2)
         
-        # Avoid division by zero
-        saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0.0)
+        # Avoid division by zero and invalid value warnings
+        saturation = np.divide(max_rgb - min_rgb, max_rgb, out=np.zeros_like(max_rgb), where=max_rgb > 0)
         
         # Invert saturation map: low saturation (grayscale-like) areas benefit more from dithering
         # High saturation areas have clear color information that should be preserved
