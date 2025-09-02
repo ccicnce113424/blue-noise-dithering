@@ -103,11 +103,8 @@ Alpha methods:
   
 Adaptive strategies:
   uniform (no adaptation - constant noise strength)
-  gradient, edge, contrast (individual structural strategies)
-  luminance, saturation (perceptual strategies)
-  gradient_edge, gradient_contrast, edge_contrast, all (structural combinations)
-  luminance_saturation, gradient_luminance, gradient_saturation (perceptual combinations)
-  all_perceptual (combines all structural and perceptual strategies)
+  gradient, edge, contrast (individual strategies)
+  gradient_edge, gradient_contrast, edge_contrast, all (combination strategies)
         """
     )
     
