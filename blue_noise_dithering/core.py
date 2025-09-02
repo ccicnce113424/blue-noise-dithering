@@ -21,7 +21,6 @@ class BlueNoiseDitherer:
     def __init__(self, 
                  color_distance_method: str = 'weighted_rgb',
                  noise_strength: float = 0.5,
-                 adaptive_noise: bool = False,
                  adaptive_strategy: str = 'gradient',
                  alpha_method: str = 'threshold',
                  alpha_threshold: float = 0.5,
@@ -31,16 +30,15 @@ class BlueNoiseDitherer:
         Args:
             color_distance_method: Method for color distance calculation
             noise_strength: Base noise strength (0.0 to 1.0)
-            adaptive_noise: Whether to use adaptive noise strength
             adaptive_strategy: Strategy for adaptive noise ('uniform', 'gradient', 'edge', 'contrast', 
                              'gradient_edge', 'gradient_contrast', 'edge_contrast', 'all')
+                             Use 'uniform' to disable adaptive noise behavior
             alpha_method: Method for alpha handling ('threshold' or 'dithering')
             alpha_threshold: Threshold for alpha processing (0.0 to 1.0)
             output_noise_map: Optional path to save noise strength map as image
         """
         self.color_calculator = ColorDistanceCalculator(color_distance_method)
         self.noise_strength = np.clip(noise_strength, 0.0, 1.0)
-        self.adaptive_noise = adaptive_noise
         self.adaptive_strategy = adaptive_strategy
         self.alpha_method = alpha_method
         self.alpha_threshold = np.clip(alpha_threshold, 0.0, 1.0)
@@ -119,8 +117,8 @@ class BlueNoiseDitherer:
         # Tile blue noise texture to match image size
         noise_texture = self._tile_blue_noise(width, height)
         
-        # Calculate adaptive noise strength if enabled
-        if self.adaptive_noise:
+        # Calculate adaptive noise strength if not using uniform strategy
+        if self.adaptive_strategy != 'uniform':
             noise_strength_map = self._calculate_adaptive_noise(image_array[:, :, :3])
         else:
             noise_strength_map = np.full((height, width), self.noise_strength)
@@ -477,7 +475,6 @@ class BlueNoiseDitherer:
         return {
             'color_distance_method': self.color_calculator.method,
             'noise_strength': float(self.noise_strength),
-            'adaptive_noise': self.adaptive_noise,
             'adaptive_strategy': self.adaptive_strategy,
             'alpha_method': self.alpha_method,
             'alpha_threshold': float(self.alpha_threshold),
@@ -495,9 +492,6 @@ class BlueNoiseDitherer:
         
         if 'noise_strength' in config:
             self.noise_strength = np.clip(config['noise_strength'], 0.0, 1.0)
-        
-        if 'adaptive_noise' in config:
-            self.adaptive_noise = config['adaptive_noise']
         
         if 'adaptive_strategy' in config:
             if config['adaptive_strategy'] in self.ADAPTIVE_STRATEGIES:

@@ -10,12 +10,10 @@ color_distance_method: ciede2000_fast
 # Base noise strength (0.0 to 1.0)
 noise_strength: 0.5
 
-# Enable adaptive noise strength
-adaptive_noise: true
-
 # Adaptive noise strategy
 # Individual: uniform, gradient, edge, contrast
 # Combinations: gradient_edge, gradient_contrast, edge_contrast, all
+# Use 'uniform' to disable adaptive noise behavior (constant noise strength)
 # Recommended: gradient_edge (balanced detail preservation)
 adaptive_strategy: gradient_edge
 

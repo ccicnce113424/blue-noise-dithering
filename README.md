@@ -37,7 +37,6 @@ python -m blue_noise_dithering.cli input.png output.png \
     --blue-noise noise.png \
     --color-distance ciede2000_fast \
     --noise-strength 0.5 \
-    --adaptive-noise \
     --adaptive-strategy gradient_edge \
     --alpha-method dithering \
     --output-noise-map noise_map.png \
@@ -78,8 +77,15 @@ Enable adaptive noise with a specific strategy:
 python -m blue_noise_dithering.cli input.png output.png \
     --palette palette.txt \
     --blue-noise noise.png \
-    --adaptive-noise \
     --adaptive-strategy gradient_edge
+```
+
+Disable adaptive noise (use uniform strategy):
+```bash
+python -m blue_noise_dithering.cli input.png output.png \
+    --palette palette.txt \
+    --blue-noise noise.png \
+    --adaptive-strategy uniform
 ```
 
 ## Noise Strength Map Output
@@ -90,7 +96,6 @@ You can save the noise strength map as a grayscale image to visualize how adapti
 python -m blue_noise_dithering.cli input.png output.png \
     --palette palette.txt \
     --blue-noise noise.png \
-    --adaptive-noise \
     --adaptive-strategy all \
     --output-noise-map noise_visualization.png
 ```
@@ -105,9 +110,8 @@ The noise map shows:
 Example `config.yaml`:
 
 ```yaml
-color_distance: weighted_rgb
+color_distance_method: weighted_rgb
 noise_strength: 0.5
-adaptive_noise: true
 adaptive_strategy: gradient_edge
 alpha_method: dithering
 alpha_threshold: 0.5

@@ -31,13 +31,21 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_fast.png \
   --color-distance rgb
 ```
 
+### Example 1a: Fast RGB Dithering with Uniform Noise (No Adaptation)
+```bash
+python -m blue_noise_dithering.cli examples/test_image.png dithered_fast_uniform.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --color-distance rgb \
+  --adaptive-strategy uniform
+```
+
 ### Example 2: High Quality with Optimal Performance
 ```bash
 python -m blue_noise_dithering.cli examples/test_image.png dithered_optimal.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
   --color-distance ciede2000_fast \
-  --adaptive-noise \
   --adaptive-strategy gradient_edge
 ```
 
@@ -47,7 +55,6 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_max_quality.
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
   --color-distance ciede2000 \
-  --adaptive-noise \
   --adaptive-strategy all
 ```
 
@@ -88,7 +95,6 @@ python -m blue_noise_dithering.cli examples/test_image.png output.png \
 python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --adaptive-noise \
   --adaptive-strategy gradient_edge \
   --color-distance ciede2000_fast
 ```
@@ -99,7 +105,6 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
 python -m blue_noise_dithering.cli examples/test_image.png dithered_max_detail.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --adaptive-noise \
   --adaptive-strategy all \
   --color-distance ciede2000
 ```
@@ -110,7 +115,6 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_max_detail.p
 python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --adaptive-noise \
   --adaptive-strategy gradient_contrast \
   --output-noise-map noise_visualization.png \
   --color-distance ciede2000_fast
@@ -124,7 +128,6 @@ python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
   --blue-noise examples/blue_noise.png \
   --color-distance ciede2000_fast \
   --noise-strength 0.6 \
-  --adaptive-noise \
   --adaptive-strategy all \
   --alpha-method dithering \
   --alpha-threshold 0.4 \
