@@ -3,15 +3,8 @@
 import numpy as np
 from typing import Tuple, Union
 import colorspacious
-import math
 import scipy.ndimage
 from tqdm import tqdm
-try:
-    import colour
-    COLOUR_AVAILABLE = True
-except ImportError:
-    COLOUR_AVAILABLE = False
-    print("Warning: colour-science not available, using fallback implementations")
 
 
 class ColorDistanceCalculator:
@@ -566,220 +559,18 @@ class ColorDistanceCalculator:
         result = self._ciede2000_fast_chunk_vectorized(lab1_batch, lab2_batch)
         return float(result[0, 0])
     
-    def _ciede2000_colour_science(self, colors_lab: np.ndarray, palette_lab: np.ndarray) -> np.ndarray:
-        """High-performance CIEDE2000 using colour-science library with advanced optimizations."""
-        n_colors = len(colors_lab)
-        n_palette = len(palette_lab)
-        distances = np.zeros((n_colors, n_palette))
-        
-        # Aggressive chunking strategy for better performance
-        max_chunk_size = min(2000, n_colors)  # Larger chunks for better throughput
-        
-        for start_idx in range(0, n_colors, max_chunk_size):
-            end_idx = min(start_idx + max_chunk_size, n_colors)
-            chunk_colors = colors_lab[start_idx:end_idx]
-            chunk_size_actual = end_idx - start_idx
-            
-            # Try vectorized approach first, fall back to loops if needed
-            try:
-                # Attempt batch processing using colour's vectorized functions
-                chunk_distances = np.zeros((chunk_size_actual, n_palette))
-                
-                # Process palette in sub-chunks to avoid memory issues
-                palette_chunk_size = min(20, n_palette)
-                
-                for pal_start in range(0, n_palette, palette_chunk_size):
-                    pal_end = min(pal_start + palette_chunk_size, n_palette)
-                    pal_chunk = palette_lab[pal_start:pal_end]
-                    
-                    # Inner loop for color-palette comparisons
-                    for i, color in enumerate(chunk_colors):
-                        for j, pal_color in enumerate(pal_chunk):
-                            try:
-                                chunk_distances[i, pal_start + j] = colour.delta_E(
-                                    color, pal_color, method='CIE 2000'
-                                )
-                            except:
-                                # Fallback to colorspacious
-                                chunk_distances[i, pal_start + j] = colorspacious.deltaE(
-                                    color, pal_color, input_space="CIELab"
-                                )
-                
-                distances[start_idx:end_idx] = chunk_distances
-                
-            except Exception as e:
-                # Final fallback: process individually
-                print(f"Warning: Batch processing failed, using individual processing: {e}")
-                for i, color in enumerate(chunk_colors):
-                    for j, pal_color in enumerate(palette_lab):
-                        try:
-                            distances[start_idx + i, j] = colour.delta_E(
-                                color, pal_color, method='CIE 2000'
-                            )
-                        except:
-                            distances[start_idx + i, j] = colorspacious.deltaE(
-                                color, pal_color, input_space="CIELab"
-                            )
-        
-        return distances
-    
-    def _ciede2000_colorspacious_optimized(self, colors_lab: np.ndarray, palette_lab: np.ndarray) -> np.ndarray:
-        """Optimized CIEDE2000 using colorspacious with maximum performance optimizations."""
-        n_colors = len(colors_lab)
-        n_palette = len(palette_lab)
-        distances = np.zeros((n_colors, n_palette))
-        
-        # Use much larger chunks for better performance  
-        chunk_size = min(10000, n_colors)  # Very large chunks
-        
-        for start_idx in range(0, n_colors, chunk_size):
-            end_idx = min(start_idx + chunk_size, n_colors)
-            chunk_colors = colors_lab[start_idx:end_idx]
-            
-            # Try to vectorize the inner loop as much as possible
-            for i, color in enumerate(chunk_colors):
-                for j, pal_color in enumerate(palette_lab):
-                    try:
-                        distances[start_idx + i, j] = colorspacious.deltaE(
-                            color, pal_color, input_space="CIELab"
-                        )
-                    except:
-                        # Ultimate fallback to pure numpy CIEDE2000 implementation
-                        distances[start_idx + i, j] = self._ciede2000_numpy_fast(color, pal_color)
-        
-        return distances
-    
-    def _ciede2000_numpy_fast(self, lab1: np.ndarray, lab2: np.ndarray) -> float:
-        """Fast numpy-based CIEDE2000 implementation for ultimate fallback."""
-        try:
-            # Simplified CIEDE2000 calculation for performance
-            # This is a fast approximation that's close to true CIEDE2000
-            
-            L1, a1, b1 = lab1[0], lab1[1], lab1[2]
-            L2, a2, b2 = lab2[0], lab2[1], lab2[2]
-            
-            # Calculate differences
-            dL = L2 - L1
-            da = a2 - a1
-            db = b2 - b1
-            
-            # Calculate chroma values
-            C1 = np.sqrt(a1**2 + b1**2)
-            C2 = np.sqrt(a2**2 + b2**2)
-            dC = C2 - C1
-            
-            # Calculate hue difference (simplified)
-            dH_squared = da**2 + db**2 - dC**2
-            dH = np.sqrt(max(0, dH_squared))
-            
-            # Average chroma and luminance
-            C_avg = (C1 + C2) / 2.0
-            L_avg = (L1 + L2) / 2.0
-            
-            # Weighting factors (simplified CIEDE2000 approximation)
-            SL = 1.0 + (0.015 * (L_avg - 50)**2) / np.sqrt(20 + (L_avg - 50)**2)
-            SC = 1.0 + 0.045 * C_avg
-            SH = 1.0 + 0.015 * C_avg
-            
-            # Final CIEDE2000 approximation
-            delta_E = np.sqrt(
-                (dL / SL)**2 + 
-                (dC / SC)**2 + 
-                (dH / SH)**2
-            )
-            
-            return delta_E
-            
-        except:
-            # Final fallback to simple Euclidean distance in LAB space
-            diff = lab1 - lab2
-            return np.sqrt(np.sum(diff ** 2))
-    
-    def _ciede2000_small_batch(self, colors_lab: np.ndarray, palette_lab: np.ndarray) -> np.ndarray:
-        """CIEDE2000 calculation for small batches only."""
-        n_colors = len(colors_lab)
-        n_palette = len(palette_lab)
-        distances = np.zeros((n_colors, n_palette))
-        
-        for i, color in enumerate(colors_lab):
-            for j, pal_color in enumerate(palette_lab):
-                try:
-                    distances[i, j] = colorspacious.deltaE(color, pal_color, input_space="CIELab")
-                except:
-                    # Fallback to CIE94
-                    distances[i, j] = self._cie94_single_from_lab(color, pal_color)
-        
-        return distances
 
     
-    def _cie94_single_from_lab(self, lab1: np.ndarray, lab2: np.ndarray) -> float:
-        """Calculate CIE94 distance between two LAB colors."""
-        delta_l = lab1[0] - lab2[0]
-        delta_a = lab1[1] - lab2[1]
-        delta_b = lab1[2] - lab2[2]
-        
-        c1 = math.sqrt(lab1[1]**2 + lab1[2]**2)
-        c2 = math.sqrt(lab2[1]**2 + lab2[2]**2)
-        delta_c = c1 - c2
-        
-        delta_h_squared = delta_a**2 + delta_b**2 - delta_c**2
-        delta_h = math.sqrt(max(0, delta_h_squared))
-        
-        # CIE94 constants
-        kl = kc = kh = 1.0
-        k1 = 0.045
-        k2 = 0.015
-        
-        sl = 1.0
-        sc = 1.0 + k1 * c1
-        sh = 1.0 + k2 * c1
-        
-        delta_e = math.sqrt(
-            (delta_l / (kl * sl))**2 +
-            (delta_c / (kc * sc))**2 +
-            (delta_h / (kh * sh))**2
-        )
-        
-        return delta_e
+
     
-    def _cie94_distance_from_lab(self, colors_lab: np.ndarray, palette_lab: np.ndarray) -> np.ndarray:
-        """Calculate CIE94 distance from pre-converted LAB colors."""
-        # Vectorized CIE94 calculation from LAB values
-        colors_expanded = colors_lab[:, np.newaxis, :]  # (N, 1, 3)
-        palette_expanded = palette_lab[np.newaxis, :, :]  # (1, M, 3)
-        
-        # Calculate differences
-        delta_l = colors_expanded[:, :, 0] - palette_expanded[:, :, 0]
-        delta_a = colors_expanded[:, :, 1] - palette_expanded[:, :, 1]
-        delta_b = colors_expanded[:, :, 2] - palette_expanded[:, :, 2]
-        
-        # Calculate chroma values
-        c1 = np.sqrt(colors_expanded[:, :, 1]**2 + colors_expanded[:, :, 2]**2)
-        c2 = np.sqrt(palette_expanded[:, :, 1]**2 + palette_expanded[:, :, 2]**2)
-        delta_c = c1 - c2
-        
-        # Calculate delta H
-        delta_h_squared = delta_a**2 + delta_b**2 - delta_c**2
-        delta_h = np.sqrt(np.maximum(0, delta_h_squared))
-        
-        # CIE94 constants for graphic arts
-        kl = kc = kh = 1.0
-        k1 = 0.045
-        k2 = 0.015
-        
-        # Calculate weighting functions
-        sl = 1.0
-        sc = 1.0 + k1 * c1
-        sh = 1.0 + k2 * c1
-        
-        # Calculate final CIE94 distance
-        delta_e = np.sqrt(
-            (delta_l / (kl * sl))**2 +
-            (delta_c / (kc * sc))**2 +
-            (delta_h / (kh * sh))**2
-        )
-        
-        return delta_e
+
+    
+
+
+    
+
+    
+
     
     def _rgb_to_oklab_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
         """Convert batch of RGB colors to Oklab color space efficiently.
