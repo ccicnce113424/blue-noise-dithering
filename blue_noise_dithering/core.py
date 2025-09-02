@@ -13,7 +13,8 @@ class BlueNoiseDitherer:
     """Main blue noise dithering processor."""
     
     ALPHA_METHODS = ['threshold', 'dithering']
-    ADAPTIVE_STRATEGIES = ['uniform', 'gradient', 'edge', 'contrast']
+    ADAPTIVE_STRATEGIES = ['uniform', 'gradient', 'edge', 'contrast', 
+                          'gradient_edge', 'gradient_contrast', 'edge_contrast', 'all']
     
     def __init__(self, 
                  color_distance_method: str = 'weighted_rgb',
@@ -21,16 +22,19 @@ class BlueNoiseDitherer:
                  adaptive_noise: bool = False,
                  adaptive_strategy: str = 'gradient',
                  alpha_method: str = 'threshold',
-                 alpha_threshold: float = 0.5):
+                 alpha_threshold: float = 0.5,
+                 output_noise_map: Optional[str] = None):
         """Initialize the ditherer.
         
         Args:
             color_distance_method: Method for color distance calculation
             noise_strength: Base noise strength (0.0 to 1.0)
             adaptive_noise: Whether to use adaptive noise strength
-            adaptive_strategy: Strategy for adaptive noise ('uniform', 'gradient', 'edge', 'contrast')
+            adaptive_strategy: Strategy for adaptive noise ('uniform', 'gradient', 'edge', 'contrast', 
+                             'gradient_edge', 'gradient_contrast', 'edge_contrast', 'all')
             alpha_method: Method for alpha handling ('threshold' or 'dithering')
             alpha_threshold: Threshold for alpha processing (0.0 to 1.0)
+            output_noise_map: Optional path to save noise strength map as image
         """
         self.color_calculator = ColorDistanceCalculator(color_distance_method)
         self.noise_strength = np.clip(noise_strength, 0.0, 1.0)
@@ -38,6 +42,7 @@ class BlueNoiseDitherer:
         self.adaptive_strategy = adaptive_strategy
         self.alpha_method = alpha_method
         self.alpha_threshold = np.clip(alpha_threshold, 0.0, 1.0)
+        self.output_noise_map = output_noise_map
         
         if alpha_method not in self.ALPHA_METHODS:
             raise ValueError(f"Unknown alpha method: {alpha_method}. Available: {self.ALPHA_METHODS}")
@@ -117,6 +122,10 @@ class BlueNoiseDitherer:
             noise_strength_map = self._calculate_adaptive_noise(image_array[:, :, :3])
         else:
             noise_strength_map = np.full((height, width), self.noise_strength)
+        
+        # Save noise strength map if requested
+        if self.output_noise_map:
+            self._save_noise_strength_map(noise_strength_map, self.output_noise_map)
         
         # Process pixels in chunks for memory efficiency
         chunk_size = 1000  # Process 1000 pixels at a time
@@ -214,70 +223,157 @@ class BlueNoiseDitherer:
         
         elif self.adaptive_strategy == 'gradient':
             # Use gradient magnitude for adaptive noise
-            gray = np.mean(rgb_image, axis=2)
-            
-            # Calculate gradients
-            grad_x = np.abs(np.gradient(gray, axis=1))
-            grad_y = np.abs(np.gradient(gray, axis=0))
-            gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-            
-            # Normalize and scale
-            if gradient_magnitude.max() > 0:
-                gradient_magnitude = gradient_magnitude / gradient_magnitude.max()
-            
-            # Higher noise in areas with lower gradients (smooth areas)
-            noise_map = self.noise_strength * (1.0 - gradient_magnitude * 0.7)
+            gradient_map = self._calculate_gradient_map(rgb_image)
+            noise_map = self.noise_strength * (1.0 - gradient_map * 0.7)
             return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
         
         elif self.adaptive_strategy == 'edge':
             # Use edge detection for adaptive noise
-            gray = np.mean(rgb_image, axis=2)
-            
-            # Simple edge detection using Sobel-like operator
-            sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-            sobel_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
-            
-            # Apply convolution (simplified)
-            edges = np.zeros_like(gray)
-            for i in range(1, height-1):
-                for j in range(1, width-1):
-                    region = gray[i-1:i+2, j-1:j+2]
-                    edge_x = np.sum(region * sobel_x)
-                    edge_y = np.sum(region * sobel_y)
-                    edges[i, j] = np.sqrt(edge_x**2 + edge_y**2)
-            
-            # Normalize
-            if edges.max() > 0:
-                edges = edges / edges.max()
-            
-            # Less noise on edges, more noise in smooth areas
-            noise_map = self.noise_strength * (1.0 - edges * 0.8)
+            edge_map = self._calculate_edge_map(rgb_image)
+            noise_map = self.noise_strength * (1.0 - edge_map * 0.8)
             return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
         
         elif self.adaptive_strategy == 'contrast':
             # Use local contrast for adaptive noise
-            gray = np.mean(rgb_image, axis=2)
-            
-            # Calculate local standard deviation as contrast measure
-            contrast = np.zeros_like(gray)
-            kernel_size = 5
-            half_kernel = kernel_size // 2
-            
-            for i in range(half_kernel, height - half_kernel):
-                for j in range(half_kernel, width - half_kernel):
-                    region = gray[i-half_kernel:i+half_kernel+1, j-half_kernel:j+half_kernel+1]
-                    contrast[i, j] = np.std(region)
-            
-            # Normalize
-            if contrast.max() > 0:
-                contrast = contrast / contrast.max()
-            
-            # More noise in low contrast areas
-            noise_map = self.noise_strength * (1.0 - contrast * 0.6)
+            contrast_map = self._calculate_contrast_map(rgb_image)
+            noise_map = self.noise_strength * (1.0 - contrast_map * 0.6)
+            return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
+        
+        elif self.adaptive_strategy == 'gradient_edge':
+            # Combine gradient and edge detection
+            gradient_map = self._calculate_gradient_map(rgb_image)
+            edge_map = self._calculate_edge_map(rgb_image)
+            combined_map = (gradient_map + edge_map) / 2.0
+            noise_map = self.noise_strength * (1.0 - combined_map * 0.75)
+            return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+        
+        elif self.adaptive_strategy == 'gradient_contrast':
+            # Combine gradient and contrast
+            gradient_map = self._calculate_gradient_map(rgb_image)
+            contrast_map = self._calculate_contrast_map(rgb_image)
+            combined_map = (gradient_map + contrast_map) / 2.0
+            noise_map = self.noise_strength * (1.0 - combined_map * 0.65)
+            return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
+        
+        elif self.adaptive_strategy == 'edge_contrast':
+            # Combine edge and contrast
+            edge_map = self._calculate_edge_map(rgb_image)
+            contrast_map = self._calculate_contrast_map(rgb_image)
+            combined_map = (edge_map + contrast_map) / 2.0
+            noise_map = self.noise_strength * (1.0 - combined_map * 0.7)
+            return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
+        
+        elif self.adaptive_strategy == 'all':
+            # Combine all three strategies
+            gradient_map = self._calculate_gradient_map(rgb_image)
+            edge_map = self._calculate_edge_map(rgb_image)
+            contrast_map = self._calculate_contrast_map(rgb_image)
+            combined_map = (gradient_map + edge_map + contrast_map) / 3.0
+            noise_map = self.noise_strength * (1.0 - combined_map * 0.6)
             return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
         
         else:
             return np.full((height, width), self.noise_strength)
+    
+    def _calculate_gradient_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate gradient magnitude map.
+        
+        Args:
+            rgb_image: RGB image array of shape (H, W, 3)
+            
+        Returns:
+            Normalized gradient magnitude map (0-1)
+        """
+        gray = np.mean(rgb_image, axis=2)
+        
+        # Calculate gradients
+        grad_x = np.abs(np.gradient(gray, axis=1))
+        grad_y = np.abs(np.gradient(gray, axis=0))
+        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+        
+        # Normalize
+        if gradient_magnitude.max() > 0:
+            gradient_magnitude = gradient_magnitude / gradient_magnitude.max()
+        
+        return gradient_magnitude
+    
+    def _calculate_edge_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate edge detection map.
+        
+        Args:
+            rgb_image: RGB image array of shape (H, W, 3)
+            
+        Returns:
+            Normalized edge map (0-1)
+        """
+        gray = np.mean(rgb_image, axis=2)
+        height, width = gray.shape
+        
+        # Simple edge detection using Sobel-like operator
+        sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+        sobel_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+        
+        # Apply convolution (simplified)
+        edges = np.zeros_like(gray)
+        for i in range(1, height-1):
+            for j in range(1, width-1):
+                region = gray[i-1:i+2, j-1:j+2]
+                edge_x = np.sum(region * sobel_x)
+                edge_y = np.sum(region * sobel_y)
+                edges[i, j] = np.sqrt(edge_x**2 + edge_y**2)
+        
+        # Normalize
+        if edges.max() > 0:
+            edges = edges / edges.max()
+        
+        return edges
+    
+    def _calculate_contrast_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate local contrast map.
+        
+        Args:
+            rgb_image: RGB image array of shape (H, W, 3)
+            
+        Returns:
+            Normalized contrast map (0-1)
+        """
+        gray = np.mean(rgb_image, axis=2)
+        height, width = gray.shape
+        
+        # Calculate local standard deviation as contrast measure
+        contrast = np.zeros_like(gray)
+        kernel_size = 5
+        half_kernel = kernel_size // 2
+        
+        for i in range(half_kernel, height - half_kernel):
+            for j in range(half_kernel, width - half_kernel):
+                region = gray[i-half_kernel:i+half_kernel+1, j-half_kernel:j+half_kernel+1]
+                contrast[i, j] = np.std(region)
+        
+        # Normalize
+        if contrast.max() > 0:
+            contrast = contrast / contrast.max()
+        
+        return contrast
+    
+    def _save_noise_strength_map(self, noise_map: np.ndarray, filepath: str) -> None:
+        """Save noise strength map as a grayscale image.
+        
+        Args:
+            noise_map: Noise strength map array (0-1 values)
+            filepath: Path to save the image
+        """
+        try:
+            # Normalize to 0-255 range
+            normalized_map = np.clip(noise_map * 255 / self.noise_strength, 0, 255).astype(np.uint8)
+            
+            # Create PIL Image and save
+            noise_image = Image.fromarray(normalized_map, mode='L')
+            noise_image.save(filepath)
+            
+            print(f"Noise strength map saved to: {filepath}")
+        except Exception as e:
+            print(f"Warning: Could not save noise strength map to {filepath}: {e}")
     
     def _find_closest_colors(self, colors: np.ndarray) -> np.ndarray:
         """Find closest palette colors for a batch of colors.
@@ -347,7 +443,8 @@ class BlueNoiseDitherer:
             'adaptive_noise': self.adaptive_noise,
             'adaptive_strategy': self.adaptive_strategy,
             'alpha_method': self.alpha_method,
-            'alpha_threshold': float(self.alpha_threshold)
+            'alpha_threshold': float(self.alpha_threshold),
+            'output_noise_map': self.output_noise_map
         }
     
     def set_config(self, config: dict) -> None:
@@ -375,3 +472,6 @@ class BlueNoiseDitherer:
         
         if 'alpha_threshold' in config:
             self.alpha_threshold = np.clip(config['alpha_threshold'], 0.0, 1.0)
+        
+        if 'output_noise_map' in config:
+            self.output_noise_map = config['output_noise_map']

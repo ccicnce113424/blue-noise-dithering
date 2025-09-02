@@ -49,6 +49,51 @@ python -m blue_noise_dithering.cli input.png output.png \
 - `oklab`: Oklab perceptual color space (moderate speed)
 - `hsv`: HSV color space distance (fast)
 
+## Adaptive Noise Strategies
+
+The adaptive noise system adjusts noise strength based on image content for better dithering quality:
+
+### Individual Strategies
+- `uniform`: Consistent noise across the entire image (no adaptation)
+- `gradient`: Reduces noise in high-gradient areas (preserves detail)
+- `edge`: Reduces noise on detected edges (preserves sharp transitions) 
+- `contrast`: Reduces noise in high-contrast areas (preserves texture detail)
+
+### Combination Strategies
+- `gradient_edge`: Combines gradient and edge detection for comprehensive detail preservation
+- `gradient_contrast`: Combines gradient and contrast for balanced detail and texture preservation
+- `edge_contrast`: Combines edge and contrast detection for sharp detail preservation
+- `all`: Combines all three individual strategies for maximum detail preservation
+
+### Usage Examples
+
+Enable adaptive noise with a specific strategy:
+```bash
+python -m blue_noise_dithering.cli input.png output.png \
+    --palette palette.txt \
+    --blue-noise noise.png \
+    --adaptive-noise \
+    --adaptive-strategy gradient_edge
+```
+
+## Noise Strength Map Output
+
+You can save the noise strength map as a grayscale image to visualize how adaptive noise is being applied:
+
+```bash
+python -m blue_noise_dithering.cli input.png output.png \
+    --palette palette.txt \
+    --blue-noise noise.png \
+    --adaptive-noise \
+    --adaptive-strategy all \
+    --output-noise-map noise_visualization.png
+```
+
+The noise map shows:
+- **White areas**: High noise strength (smooth areas that benefit from dithering)
+- **Dark areas**: Low noise strength (detailed areas where noise is reduced)
+- **Gray areas**: Medium noise strength (balanced dithering)
+
 ## Configuration File
 
 Example `config.yaml`:
@@ -57,9 +102,10 @@ Example `config.yaml`:
 color_distance: weighted_rgb
 noise_strength: 0.5
 adaptive_noise: true
-adaptive_strategy: gradient
+adaptive_strategy: gradient_edge
 alpha_method: dithering
 alpha_threshold: 0.5
+output_noise_map: noise_strength_map.png
 ```
 
 ## Performance Notes
