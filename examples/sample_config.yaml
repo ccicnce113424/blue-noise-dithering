@@ -1,0 +1,26 @@
+# Sample configuration file for blue noise dithering
+
+# Color distance calculation method
+# Available: rgb, weighted_rgb, cie76, cie94, ciede2000, oklab, hsv
+color_distance_method: ciede2000
+
+# Base noise strength (0.0 to 1.0)
+noise_strength: 0.5
+
+# Enable adaptive noise strength
+adaptive_noise: true
+
+# Adaptive noise strategy
+# Available: uniform, gradient, edge, contrast
+adaptive_strategy: gradient
+
+# Alpha channel handling method
+# Available: threshold, dithering
+alpha_method: dithering
+
+# Alpha threshold for transparency (0.0 to 1.0)
+alpha_threshold: 0.5
+
+# File paths (can be overridden by command line)
+# palette_file: examples/sample_palette.txt
+# blue_noise_file: examples/blue_noise.png

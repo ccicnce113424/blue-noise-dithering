@@ -1,0 +1,20 @@
+; Paint.NET Palette File
+; Sample 16-color palette
+; Based on classic CGA colors
+;
+#000000  ; Black
+#800000  ; Dark Red
+#008000  ; Dark Green
+#808000  ; Dark Yellow
+#000080  ; Dark Blue
+#800080  ; Dark Magenta
+#008080  ; Dark Cyan
+#C0C0C0  ; Light Gray
+#808080  ; Dark Gray
+#FF0000  ; Red
+#00FF00  ; Green
+#FFFF00  ; Yellow
+#0000FF  ; Blue
+#FF00FF  ; Magenta
+#00FFFF  ; Cyan
+#FFFFFF  ; White
