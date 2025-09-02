@@ -116,8 +116,8 @@ Adaptive strategies:
     # Color distance
     parser.add_argument('--color-distance', '-c', type=str, 
                        choices=ColorDistanceCalculator.METHODS,
-                       default='ciede2000',
-                       help='Color distance calculation method (default: ciede2000)')
+                       default='weighted_rgb',
+                       help='Color distance calculation method (default: weighted_rgb)')
     
     # Noise settings
     parser.add_argument('--noise-strength', '-s', type=float, default=0.5,
@@ -184,7 +184,7 @@ Adaptive strategies:
         config['alpha_threshold'] = args.alpha_threshold
     
     # Set defaults for missing config values
-    config.setdefault('color_distance_method', 'ciede2000')
+    config.setdefault('color_distance_method', 'weighted_rgb')
     config.setdefault('noise_strength', 0.5)
     config.setdefault('adaptive_noise', False)
     config.setdefault('adaptive_strategy', 'gradient')

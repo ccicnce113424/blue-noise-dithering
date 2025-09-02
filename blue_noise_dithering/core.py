@@ -16,7 +16,7 @@ class BlueNoiseDitherer:
     ADAPTIVE_STRATEGIES = ['uniform', 'gradient', 'edge', 'contrast']
     
     def __init__(self, 
-                 color_distance_method: str = 'ciede2000',
+                 color_distance_method: str = 'weighted_rgb',
                  noise_strength: float = 0.5,
                  adaptive_noise: bool = False,
                  adaptive_strategy: str = 'gradient',
@@ -343,11 +343,11 @@ class BlueNoiseDitherer:
         """
         return {
             'color_distance_method': self.color_calculator.method,
-            'noise_strength': self.noise_strength,
+            'noise_strength': float(self.noise_strength),
             'adaptive_noise': self.adaptive_noise,
             'adaptive_strategy': self.adaptive_strategy,
             'alpha_method': self.alpha_method,
-            'alpha_threshold': self.alpha_threshold
+            'alpha_threshold': float(self.alpha_threshold)
         }
     
     def set_config(self, config: dict) -> None:

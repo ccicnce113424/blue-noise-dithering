@@ -2,7 +2,8 @@
 
 # Color distance calculation method
 # Available: rgb, weighted_rgb, cie76, cie94, ciede2000, oklab, hsv
-color_distance_method: ciede2000
+# Note: ciede2000 is very accurate but slow, use rgb or weighted_rgb for speed
+color_distance_method: weighted_rgb
 
 # Base noise strength (0.0 to 1.0)
 noise_strength: 0.5
