@@ -661,7 +661,7 @@ class ColorDistanceCalculator:
         v = max_val
         
         # Saturation
-        s = np.where(max_val == 0, 0, diff / max_val)
+        s = np.divide(diff, max_val, out=np.zeros_like(max_val), where=max_val != 0)
         
         # Hue calculation (vectorized)
         h = np.zeros_like(max_val)
