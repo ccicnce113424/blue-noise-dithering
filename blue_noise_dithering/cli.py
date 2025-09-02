@@ -58,9 +58,10 @@ def create_sample_config(config_path: str) -> None:
         'color_distance': 'ciede2000',
         'noise_strength': 0.5,
         'adaptive_noise': True,
-        'adaptive_strategy': 'gradient',
+        'adaptive_strategy': 'gradient_edge',
         'alpha_method': 'dithering',
-        'alpha_threshold': 0.5
+        'alpha_threshold': 0.5,
+        'output_noise_map': 'noise_strength_map.png'
     }
     
     save_config(sample_config, config_path)
@@ -99,7 +100,7 @@ Alpha methods:
   threshold, dithering
   
 Adaptive strategies:
-  uniform, gradient, edge, contrast
+  uniform, gradient, edge, contrast, gradient_edge, gradient_contrast, edge_contrast, all
         """
     )
     
@@ -128,6 +129,8 @@ Adaptive strategies:
                        choices=BlueNoiseDitherer.ADAPTIVE_STRATEGIES,
                        default='gradient',
                        help='Adaptive noise strategy (default: gradient)')
+    parser.add_argument('--output-noise-map', type=str,
+                       help='Save noise strength map as grayscale image to specified path')
     
     # Alpha handling
     parser.add_argument('--alpha-method', type=str,
@@ -178,6 +181,8 @@ Adaptive strategies:
         config['adaptive_noise'] = True
     if args.adaptive_strategy:
         config['adaptive_strategy'] = args.adaptive_strategy
+    if args.output_noise_map:
+        config['output_noise_map'] = args.output_noise_map
     if args.alpha_method:
         config['alpha_method'] = args.alpha_method
     if args.alpha_threshold is not None:
@@ -218,7 +223,8 @@ Adaptive strategies:
             adaptive_noise=config['adaptive_noise'],
             adaptive_strategy=config['adaptive_strategy'],
             alpha_method=config['alpha_method'],
-            alpha_threshold=config['alpha_threshold']
+            alpha_threshold=config['alpha_threshold'],
+            output_noise_map=config.get('output_noise_map')
         )
         
         # Load palette

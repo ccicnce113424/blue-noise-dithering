@@ -72,6 +72,56 @@ python -m blue_noise_dithering.cli examples/test_image.png output.png \
   --save-config reusable_settings.yaml
 ```
 
+### Example 6: Combination Adaptive Strategies
+```bash
+# Use gradient and edge detection combination for detailed image preservation
+python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --adaptive-noise \
+  --adaptive-strategy gradient_edge \
+  --color-distance weighted_rgb
+```
+
+### Example 7: Maximum Detail Preservation
+```bash
+# Use all strategies combined for maximum detail preservation
+python -m blue_noise_dithering.cli examples/test_image.png dithered_max_detail.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --adaptive-noise \
+  --adaptive-strategy all \
+  --color-distance ciede2000
+```
+
+### Example 8: Noise Strength Map Visualization
+```bash
+# Generate both dithered image and noise strength visualization
+python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --adaptive-noise \
+  --adaptive-strategy gradient_contrast \
+  --output-noise-map noise_visualization.png \
+  --color-distance weighted_rgb
+```
+
+### Example 9: Complete Advanced Configuration
+```bash
+# Full featured configuration showing all new options
+python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --color-distance ciede2000 \
+  --noise-strength 0.6 \
+  --adaptive-noise \
+  --adaptive-strategy all \
+  --alpha-method dithering \
+  --alpha-threshold 0.4 \
+  --output-noise-map complete_noise_map.png \
+  --save-config complete_settings.yaml
+```
+
 ## Color Distance Methods Comparison
 
 | Method | Speed | Quality | Best Use Case |
@@ -86,10 +136,37 @@ python -m blue_noise_dithering.cli examples/test_image.png output.png \
 
 ## Adaptive Noise Strategies
 
-- **uniform**: Consistent noise across the image (fastest)
-- **gradient**: Less noise in detailed areas (recommended)
-- **edge**: Preserves sharp edges
+### Individual Strategies
+- **uniform**: Consistent noise across the image (fastest, no adaptation)
+- **gradient**: Less noise in detailed areas (recommended for general use)
+- **edge**: Preserves sharp edges and transitions
 - **contrast**: Adapts to local contrast variations
+
+### Combination Strategies
+- **gradient_edge**: Combines gradient and edge detection for comprehensive detail preservation
+- **gradient_contrast**: Combines gradient and contrast for balanced detail/texture preservation
+- **edge_contrast**: Combines edge and contrast detection for sharp detail preservation  
+- **all**: Combines all three strategies for maximum detail preservation (slowest)
+
+### Strategy Selection Guide
+| Strategy | Speed | Detail Preservation | Best Use Case |
+|----------|-------|-------------------|---------------|
+| `uniform` | Fastest | None | Simple images, speed priority |
+| `gradient` | Fast | Good | General purpose (recommended) |
+| `edge` | Fast | Sharp details | Line art, technical drawings |
+| `contrast` | Fast | Texture | Photos with varied textures |
+| `gradient_edge` | Medium | Excellent | Detailed artwork, illustrations |
+| `gradient_contrast` | Medium | Excellent | Complex photos |
+| `edge_contrast` | Medium | Sharp + Texture | Mixed content |
+| `all` | Slowest | Maximum | Highest quality requirements |
+
+### Noise Map Visualization
+When using `--output-noise-map`, the generated grayscale image shows:
+- **White pixels**: High noise strength (smooth areas)
+- **Black pixels**: Low noise strength (detailed areas)  
+- **Gray pixels**: Medium noise strength (moderate detail areas)
+
+This visualization helps understand how the adaptive algorithm is working and can guide strategy selection.
 
 ## Performance Tips
 

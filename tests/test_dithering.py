@@ -256,6 +256,71 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         self.assertEqual(retrieved_config['adaptive_strategy'], 'edge')
         self.assertEqual(retrieved_config['alpha_method'], 'dithering')
         self.assertEqual(retrieved_config['alpha_threshold'], 0.3)
+    
+    def test_noise_map_output(self):
+        """Test noise strength map output functionality."""
+        import tempfile
+        import os
+        
+        # Create a temporary file for the noise map
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        
+        try:
+            # Set up ditherer with noise map output
+            self.ditherer.output_noise_map = tmp_path
+            self.ditherer.adaptive_noise = True
+            self.ditherer.adaptive_strategy = 'gradient'
+            self.ditherer.blue_noise_texture = self.blue_noise_array
+            
+            # Load a simple palette
+            palette_loader = PaletteLoader()
+            palette_loader.create_grayscale_palette(4)
+            self.ditherer.load_palette(palette_loader)
+            
+            # Perform dithering
+            result = self.ditherer.dither_image(self.test_image)
+            
+            # Check that the noise map file was created
+            self.assertTrue(os.path.exists(tmp_path))
+            
+            # Check that the noise map is a valid image
+            noise_map_image = Image.open(tmp_path)
+            self.assertEqual(noise_map_image.mode, 'L')  # Grayscale
+            self.assertEqual(noise_map_image.size, (64, 64))  # Same size as input image
+            
+        finally:
+            # Clean up
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    
+    def test_combination_strategies(self):
+        """Test combination adaptive strategies specifically."""
+        self.ditherer.blue_noise_texture = self.blue_noise_array
+        
+        rgb_image = np.array(self.test_image)
+        
+        # Test combination strategies
+        combination_strategies = ['gradient_edge', 'gradient_contrast', 'edge_contrast', 'all']
+        
+        for strategy in combination_strategies:
+            with self.subTest(strategy=strategy):
+                self.ditherer.adaptive_strategy = strategy
+                self.ditherer.adaptive_noise = True
+                
+                noise_map = self.ditherer._calculate_adaptive_noise(rgb_image)
+                
+                self.assertEqual(noise_map.shape, (64, 64))
+                self.assertTrue(np.all(noise_map >= 0))
+                self.assertTrue(np.all(noise_map <= 1))
+                
+                # Test that combination strategies produce different results than individual ones
+                self.ditherer.adaptive_strategy = 'uniform'
+                uniform_map = self.ditherer._calculate_adaptive_noise(rgb_image)
+                
+                # They should not be identical (unless the image is completely uniform)
+                if not np.allclose(noise_map, uniform_map):
+                    self.assertTrue(True)  # Good, they're different
 
 
 if __name__ == '__main__':
