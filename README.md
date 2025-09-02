@@ -67,14 +67,17 @@ The adaptive noise system adjusts noise strength based on image content for bett
 - `saturation`: Increases noise in low-saturation (grayscale-like) areas
 
 ### Combination Strategies
-- `gradient_edge`: Combines gradient and edge detection for comprehensive detail preservation
-- `gradient_contrast`: Combines gradient and contrast for balanced detail and texture preservation
-- `edge_contrast`: Combines edge and contrast detection for sharp detail preservation
-- `luminance_saturation`: Combines perceptual luminance and saturation analysis
-- `gradient_luminance`: Balances structural detail with perceptual importance
-- `gradient_saturation`: Balances structural detail with color saturation
-- `all`: Combines all three original structural strategies for maximum detail preservation
-- `all_perceptual`: Combines all structural and perceptual strategies for optimal results
+
+These strategies use weighted combinations of individual techniques to provide optimal results:
+
+- `gradient_edge`: Combines gradient (70%) and edge detection (30%) for comprehensive detail preservation. Gradient detection provides more comprehensive structural information than edge detection.
+- `gradient_contrast`: Combines gradient (60%) and contrast (40%) for balanced detail and texture preservation. Balances structural detail detection with texture information.
+- `edge_contrast`: Combines edge (55%) and contrast (45%) detection for sharp detail preservation. Slight preference for edge detection in sharp detail areas.
+- `luminance_saturation`: Combines perceptual luminance (60%) and saturation (40%) analysis. Luminance provides better perceptual importance weighting.
+- `gradient_luminance`: Balances structural detail (40%) with perceptual importance (60%). Already optimally weighted.
+- `gradient_saturation`: Balances structural detail (40%) with color saturation (60%). Already optimally weighted.
+- `all`: Combines gradient (50%), edge (25%), and contrast (25%) for maximum detail preservation. Gradient is most reliable, others provide complementary information.
+- `all_perceptual`: Combines all structural and perceptual strategies for optimal results. Already optimally weighted.
 
 ### Usage Examples
 

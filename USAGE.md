@@ -157,10 +157,17 @@ python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
 - **contrast**: Adapts to local contrast variations
 
 ### Combination Strategies
-- **gradient_edge**: Combines gradient and edge detection for comprehensive detail preservation
-- **gradient_contrast**: Combines gradient and contrast for balanced detail/texture preservation
-- **edge_contrast**: Combines edge and contrast detection for sharp detail preservation  
-- **all**: Combines all three strategies for maximum detail preservation (slowest)
+
+These strategies use weighted combinations optimized for different content types:
+
+- **gradient_edge**: Combines gradient (70%) and edge detection (30%) for comprehensive detail preservation. Gradient provides more reliable structural information.
+- **gradient_contrast**: Combines gradient (60%) and contrast (40%) for balanced detail/texture preservation. Balances structural detection with texture analysis.
+- **edge_contrast**: Combines edge (55%) and contrast (45%) detection for sharp detail preservation. Slight preference for edge detection.
+- **luminance_saturation**: Combines luminance (60%) and saturation (40%) for perceptual optimization. Luminance has better perceptual importance.
+- **gradient_luminance**: Balances structural detail (40%) with perceptual importance (60%). Optimized for perceptual quality.
+- **gradient_saturation**: Balances structural detail (40%) with color saturation (60%). Optimized for color preservation.
+- **all**: Combines gradient (50%), edge (25%), and contrast (25%) for maximum detail preservation. Gradient is most comprehensive.
+- **all_perceptual**: Combines all structural and perceptual strategies with optimal weighting for best results.
 
 ### Strategy Selection Guide
 | Strategy | Speed | Detail Preservation | Best Use Case |
