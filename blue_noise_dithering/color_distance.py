@@ -64,12 +64,13 @@ class ColorDistanceCalculator:
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
-    def calculate_distances_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+    def calculate_distances_batch(self, colors: np.ndarray, palette: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Calculate distances between colors and entire palette efficiently.
         
         Args:
             colors: Array of colors shape (N, 3) in 0-255 range
             palette: Array of palette colors shape (M, 3) in 0-255 range
+            show_progress: Whether to show progress bar for expensive methods
             
         Returns:
             Distance matrix shape (N, M)
@@ -89,7 +90,7 @@ class ColorDistanceCalculator:
         elif self.method == 'cie94':
             return self._cie94_distance_batch(colors, palette)
         elif self.method == 'ciede2000':
-            return self._ciede2000_distance_batch(colors, palette)
+            return self._ciede2000_distance_batch(colors, palette, show_progress)
         elif self.method == 'oklab':
             return self._oklab_distance_batch(colors, palette)
         elif self.method == 'hsv':
@@ -284,7 +285,7 @@ class ColorDistanceCalculator:
             # Fallback to CIE76 if CIEDE2000 fails
             return self._cie76_distance(color1, color2)
     
-    def _ciede2000_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+    def _ciede2000_distance_batch(self, colors: np.ndarray, palette: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Batch CIEDE2000 distance calculation using high-performance implementations."""
         # Check cache for palette LAB conversion
         if 'ciede2000_palette' not in self._palette_cache:
@@ -297,12 +298,13 @@ class ColorDistanceCalculator:
         n_colors = len(colors)
         n_palette = len(palette)
         
-        print(f"Computing CIEDE2000 for {n_colors} colors vs {n_palette} palette colors...")
+        if show_progress:
+            print(f"Computing CIEDE2000 for {n_colors} colors vs {n_palette} palette colors...")
         
         # Use our optimized vectorized implementation for best performance
-        return self._ciede2000_vectorized_optimized(colors_lab, palette_lab)
+        return self._ciede2000_vectorized_optimized(colors_lab, palette_lab, show_progress)
     
-    def _ciede2000_vectorized_optimized(self, colors_lab: np.ndarray, palette_lab: np.ndarray) -> np.ndarray:
+    def _ciede2000_vectorized_optimized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Highly optimized vectorized CIEDE2000 implementation."""
         n_colors = len(colors_lab)
         n_palette = len(palette_lab)
@@ -311,7 +313,8 @@ class ColorDistanceCalculator:
         chunk_size = min(1000, n_colors)  # Balance memory vs performance
         distances = np.zeros((n_colors, n_palette))
         
-        with tqdm(total=n_colors, desc="CIEDE2000", unit="px") as pbar:
+        # Only show progress bar if requested (avoid conflicts with main progress bar)
+        with tqdm(total=n_colors, desc="CIEDE2000", unit="px", disable=not show_progress) as pbar:
             for start_idx in range(0, n_colors, chunk_size):
                 end_idx = min(start_idx + chunk_size, n_colors)
                 chunk_colors = colors_lab[start_idx:end_idx]
@@ -320,7 +323,8 @@ class ColorDistanceCalculator:
                 chunk_distances = self._ciede2000_chunk_vectorized(chunk_colors, palette_lab)
                 distances[start_idx:end_idx] = chunk_distances
                 
-                pbar.update(end_idx - start_idx)
+                if show_progress:
+                    pbar.update(end_idx - start_idx)
         
         return distances
     
