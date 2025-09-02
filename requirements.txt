@@ -3,3 +3,6 @@ numpy>=1.24.0
 colorspacious>=1.1.2
 tqdm>=4.64.0
 PyYAML>=6.0
+scipy>=1.10.0
+colour-science>=0.4.3
+scikit-image>=0.21.0

@@ -4,6 +4,8 @@ import numpy as np
 from PIL import Image
 from typing import Tuple, Union, Optional, Callable
 from tqdm import tqdm
+import scipy.ndimage
+from skimage import filters, feature
 
 from .color_distance import ColorDistanceCalculator
 from .palette import PaletteLoader
@@ -218,7 +220,7 @@ class BlueNoiseDitherer:
         return tiled[:height, :width]
     
     def _calculate_adaptive_noise(self, rgb_image: np.ndarray) -> np.ndarray:
-        """Calculate adaptive noise strength map.
+        """Calculate adaptive noise strength map with performance optimizations.
         
         Args:
             rgb_image: RGB image array of shape (H, W, 3)
@@ -231,62 +233,78 @@ class BlueNoiseDitherer:
         if self.adaptive_strategy == 'uniform':
             return np.full((height, width), self.noise_strength)
         
-        elif self.adaptive_strategy == 'gradient':
-            # Use gradient magnitude for adaptive noise
-            gradient_map = self._calculate_gradient_map(rgb_image)
-            noise_map = self.noise_strength * (1.0 - gradient_map * 0.7)
-            return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+        print("Calculating adaptive noise strength map...")
         
-        elif self.adaptive_strategy == 'edge':
-            # Use edge detection for adaptive noise
-            edge_map = self._calculate_edge_map(rgb_image)
-            noise_map = self.noise_strength * (1.0 - edge_map * 0.8)
-            return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
-        
-        elif self.adaptive_strategy == 'contrast':
-            # Use local contrast for adaptive noise
-            contrast_map = self._calculate_contrast_map(rgb_image)
-            noise_map = self.noise_strength * (1.0 - contrast_map * 0.6)
-            return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
-        
-        elif self.adaptive_strategy == 'gradient_edge':
-            # Combine gradient and edge detection
-            gradient_map = self._calculate_gradient_map(rgb_image)
-            edge_map = self._calculate_edge_map(rgb_image)
-            combined_map = (gradient_map + edge_map) / 2.0
-            noise_map = self.noise_strength * (1.0 - combined_map * 0.75)
-            return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
-        
-        elif self.adaptive_strategy == 'gradient_contrast':
-            # Combine gradient and contrast
-            gradient_map = self._calculate_gradient_map(rgb_image)
-            contrast_map = self._calculate_contrast_map(rgb_image)
-            combined_map = (gradient_map + contrast_map) / 2.0
-            noise_map = self.noise_strength * (1.0 - combined_map * 0.65)
-            return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
-        
-        elif self.adaptive_strategy == 'edge_contrast':
-            # Combine edge and contrast
-            edge_map = self._calculate_edge_map(rgb_image)
-            contrast_map = self._calculate_contrast_map(rgb_image)
-            combined_map = (edge_map + contrast_map) / 2.0
-            noise_map = self.noise_strength * (1.0 - combined_map * 0.7)
-            return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
-        
-        elif self.adaptive_strategy == 'all':
-            # Combine all three strategies
-            gradient_map = self._calculate_gradient_map(rgb_image)
-            edge_map = self._calculate_edge_map(rgb_image)
-            contrast_map = self._calculate_contrast_map(rgb_image)
-            combined_map = (gradient_map + edge_map + contrast_map) / 3.0
-            noise_map = self.noise_strength * (1.0 - combined_map * 0.6)
-            return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
-        
-        else:
-            return np.full((height, width), self.noise_strength)
+        with tqdm(total=100, desc="Adaptive noise", unit="%") as pbar:
+            if self.adaptive_strategy == 'gradient':
+                # Use gradient magnitude for adaptive noise
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(100)
+                noise_map = self.noise_strength * (1.0 - gradient_map * 0.7)
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'edge':
+                # Use edge detection for adaptive noise
+                edge_map = self._calculate_edge_map_optimized(rgb_image)
+                pbar.update(100)
+                noise_map = self.noise_strength * (1.0 - edge_map * 0.8)
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'contrast':
+                # Use local contrast for adaptive noise
+                contrast_map = self._calculate_contrast_map_optimized(rgb_image)
+                pbar.update(100)
+                noise_map = self.noise_strength * (1.0 - contrast_map * 0.6)
+                return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'gradient_edge':
+                # Combine gradient and edge detection
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(50)
+                edge_map = self._calculate_edge_map_optimized(rgb_image)
+                pbar.update(50)
+                combined_map = (gradient_map + edge_map) / 2.0
+                noise_map = self.noise_strength * (1.0 - combined_map * 0.75)
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'gradient_contrast':
+                # Combine gradient and contrast
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(50)
+                contrast_map = self._calculate_contrast_map_optimized(rgb_image)
+                pbar.update(50)
+                combined_map = (gradient_map + contrast_map) / 2.0
+                noise_map = self.noise_strength * (1.0 - combined_map * 0.65)
+                return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'edge_contrast':
+                # Combine edge and contrast
+                edge_map = self._calculate_edge_map_optimized(rgb_image)
+                pbar.update(50)
+                contrast_map = self._calculate_contrast_map_optimized(rgb_image)
+                pbar.update(50)
+                combined_map = (edge_map + contrast_map) / 2.0
+                noise_map = self.noise_strength * (1.0 - combined_map * 0.7)
+                return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'all':
+                # Combine all three strategies
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(33)
+                edge_map = self._calculate_edge_map_optimized(rgb_image)
+                pbar.update(33)
+                contrast_map = self._calculate_contrast_map_optimized(rgb_image)
+                pbar.update(34)
+                combined_map = (gradient_map + edge_map + contrast_map) / 3.0
+                noise_map = self.noise_strength * (1.0 - combined_map * 0.6)
+                return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
+            
+            else:
+                pbar.update(100)
+                return np.full((height, width), self.noise_strength)
     
-    def _calculate_gradient_map(self, rgb_image: np.ndarray) -> np.ndarray:
-        """Calculate gradient magnitude map.
+    def _calculate_gradient_map_optimized(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate gradient magnitude map using optimized scipy operations.
         
         Args:
             rgb_image: RGB image array of shape (H, W, 3)
@@ -296,9 +314,9 @@ class BlueNoiseDitherer:
         """
         gray = np.mean(rgb_image, axis=2)
         
-        # Calculate gradients
-        grad_x = np.abs(np.gradient(gray, axis=1))
-        grad_y = np.abs(np.gradient(gray, axis=0))
+        # Use scipy's optimized gradient calculation
+        grad_x = scipy.ndimage.sobel(gray, axis=1)
+        grad_y = scipy.ndimage.sobel(gray, axis=0)
         gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
         
         # Normalize
@@ -307,8 +325,8 @@ class BlueNoiseDitherer:
         
         return gradient_magnitude
     
-    def _calculate_edge_map(self, rgb_image: np.ndarray) -> np.ndarray:
-        """Calculate edge detection map.
+    def _calculate_edge_map_optimized(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate edge detection map using optimized skimage operations.
         
         Args:
             rgb_image: RGB image array of shape (H, W, 3)
@@ -317,29 +335,24 @@ class BlueNoiseDitherer:
             Normalized edge map (0-1)
         """
         gray = np.mean(rgb_image, axis=2)
-        height, width = gray.shape
         
-        # Simple edge detection using Sobel-like operator
-        sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-        sobel_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+        # Use skimage's optimized Canny edge detection
+        edges = feature.canny(gray / 255.0, low_threshold=0.1, high_threshold=0.2)
         
-        # Apply convolution (simplified)
-        edges = np.zeros_like(gray)
-        for i in range(1, height-1):
-            for j in range(1, width-1):
-                region = gray[i-1:i+2, j-1:j+2]
-                edge_x = np.sum(region * sobel_x)
-                edge_y = np.sum(region * sobel_y)
-                edges[i, j] = np.sqrt(edge_x**2 + edge_y**2)
+        # Convert boolean to float and optionally dilate for smoother transitions
+        edge_map = edges.astype(np.float32)
+        
+        # Apply Gaussian blur for smoother edge transitions
+        edge_map = scipy.ndimage.gaussian_filter(edge_map, sigma=1.0)
         
         # Normalize
-        if edges.max() > 0:
-            edges = edges / edges.max()
+        if edge_map.max() > 0:
+            edge_map = edge_map / edge_map.max()
         
-        return edges
+        return edge_map
     
-    def _calculate_contrast_map(self, rgb_image: np.ndarray) -> np.ndarray:
-        """Calculate local contrast map.
+    def _calculate_contrast_map_optimized(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate local contrast map using optimized scipy operations.
         
         Args:
             rgb_image: RGB image array of shape (H, W, 3)
@@ -348,23 +361,36 @@ class BlueNoiseDitherer:
             Normalized contrast map (0-1)
         """
         gray = np.mean(rgb_image, axis=2)
-        height, width = gray.shape
         
-        # Calculate local standard deviation as contrast measure
-        contrast = np.zeros_like(gray)
+        # Use scipy's optimized uniform filter for local statistics
         kernel_size = 5
-        half_kernel = kernel_size // 2
         
-        for i in range(half_kernel, height - half_kernel):
-            for j in range(half_kernel, width - half_kernel):
-                region = gray[i-half_kernel:i+half_kernel+1, j-half_kernel:j+half_kernel+1]
-                contrast[i, j] = np.std(region)
+        # Calculate local mean and local variance efficiently
+        local_mean = scipy.ndimage.uniform_filter(gray, size=kernel_size)
+        local_mean_sq = scipy.ndimage.uniform_filter(gray**2, size=kernel_size)
+        local_variance = local_mean_sq - local_mean**2
+        
+        # Local standard deviation as contrast measure
+        contrast = np.sqrt(np.maximum(local_variance, 0))
         
         # Normalize
         if contrast.max() > 0:
             contrast = contrast / contrast.max()
         
         return contrast
+    
+    # Keep original methods as fallbacks for compatibility
+    def _calculate_gradient_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Fallback gradient calculation (for compatibility)."""
+        return self._calculate_gradient_map_optimized(rgb_image)
+    
+    def _calculate_edge_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Fallback edge calculation (for compatibility)."""
+        return self._calculate_edge_map_optimized(rgb_image)
+    
+    def _calculate_contrast_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Fallback contrast calculation (for compatibility)."""
+        return self._calculate_contrast_map_optimized(rgb_image)
     
     def _save_noise_strength_map(self, noise_map: np.ndarray, filepath: str) -> None:
         """Save noise strength map as a grayscale image.
