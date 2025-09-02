@@ -1,9 +1,11 @@
 # Sample configuration file for blue noise dithering
 
 # Color distance calculation method
-# Available: rgb, weighted_rgb, cie76, cie94, ciede2000, oklab, hsv
-# Note: ciede2000 is very accurate but slow, use rgb or weighted_rgb for speed
-color_distance_method: weighted_rgb
+# Available: rgb, weighted_rgb, cie76, cie94, ciede2000, ciede2000_fast, oklab, hsv
+# Recommended: ciede2000_fast (excellent quality with good performance)
+# For speed: weighted_rgb, rgb
+# For maximum quality: ciede2000 (slower)
+color_distance_method: ciede2000_fast
 
 # Base noise strength (0.0 to 1.0)
 noise_strength: 0.5
@@ -12,8 +14,10 @@ noise_strength: 0.5
 adaptive_noise: true
 
 # Adaptive noise strategy
-# Available: uniform, gradient, edge, contrast
-adaptive_strategy: gradient
+# Individual: uniform, gradient, edge, contrast
+# Combinations: gradient_edge, gradient_contrast, edge_contrast, all
+# Recommended: gradient_edge (balanced detail preservation)
+adaptive_strategy: gradient_edge
 
 # Alpha channel handling method
 # Available: threshold, dithering
@@ -21,6 +25,11 @@ alpha_method: dithering
 
 # Alpha threshold for transparency (0.0 to 1.0)
 alpha_threshold: 0.5
+
+# Output noise strength map (optional)
+# Saves adaptive noise strength as grayscale image
+# White = high noise, Black = low noise, Gray = medium
+# output_noise_map: noise_strength_visualization.png
 
 # File paths (can be overridden by command line)
 # palette_file: examples/sample_palette.txt
