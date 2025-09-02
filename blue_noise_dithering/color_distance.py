@@ -11,7 +11,7 @@ class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -54,6 +54,8 @@ class ColorDistanceCalculator:
             return self._oklab_distance(color1, color2)
         elif self.method == 'hsv':
             return self._hsv_distance(color1, color2)
+        elif self.method == 'compuphase':
+            return self._compuphase_distance(color1, color2)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -90,6 +92,8 @@ class ColorDistanceCalculator:
             return self._oklab_distance_batch(colors, palette)
         elif self.method == 'hsv':
             return self._hsv_distance_batch(colors, palette)
+        elif self.method == 'compuphase':
+            return self._compuphase_distance_batch(colors, palette)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -745,3 +749,68 @@ class ColorDistanceCalculator:
         )
         
         return distance
+    
+    def _compuphase_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
+        """Compuphase low-cost color distance approximation.
+        
+        Based on the algorithm from https://www.compuphase.com/cmetric.htm
+        This is a fast approximation that takes into account human color perception
+        by weighting colors based on the average red value.
+        """
+        # Convert to int to match the original C implementation
+        r1, g1, b1 = color1.astype(np.int32)
+        r2, g2, b2 = color2.astype(np.int32)
+        
+        # Calculate mean red value
+        rmean = (r1 + r2) // 2
+        
+        # Calculate color differences
+        dr = r1 - r2
+        dg = g1 - g2
+        db = b1 - b2
+        
+        # Apply the compuphase formula with bit shifts
+        # (512+rmean)*dr*dr >> 8 + 4*dg*dg + (767-rmean)*db*db >> 8
+        red_term = ((512 + rmean) * dr * dr) >> 8
+        green_term = 4 * dg * dg
+        blue_term = ((767 - rmean) * db * db) >> 8
+        
+        distance_squared = red_term + green_term + blue_term
+        return np.sqrt(distance_squared)
+    
+    def _compuphase_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+        """Batch compuphase distance calculation with vectorized operations."""
+        # Convert to int32 for calculations
+        colors = colors.astype(np.int32)
+        palette = palette.astype(np.int32)
+        
+        # Reshape for broadcasting: colors (N, 1, 3), palette (1, M, 3)
+        colors_expanded = colors[:, np.newaxis, :]  # (N, 1, 3)
+        palette_expanded = palette[np.newaxis, :, :]  # (1, M, 3)
+        
+        # Extract color components
+        r1 = colors_expanded[:, :, 0]
+        g1 = colors_expanded[:, :, 1] 
+        b1 = colors_expanded[:, :, 2]
+        
+        r2 = palette_expanded[:, :, 0]
+        g2 = palette_expanded[:, :, 1]
+        b2 = palette_expanded[:, :, 2]
+        
+        # Calculate mean red values (vectorized)
+        rmean = (r1 + r2) // 2
+        
+        # Calculate color differences (vectorized)
+        dr = r1 - r2
+        dg = g1 - g2
+        db = b1 - b2
+        
+        # Apply the compuphase formula with bit shifts (vectorized)
+        red_term = ((512 + rmean) * dr * dr) >> 8
+        green_term = 4 * dg * dg
+        blue_term = ((767 - rmean) * db * db) >> 8
+        
+        distance_squared = red_term + green_term + blue_term
+        distances = np.sqrt(distance_squared.astype(np.float64))
+        
+        return distances
