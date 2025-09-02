@@ -55,9 +55,8 @@ def create_sample_config(config_path: str) -> None:
         config_path: Path to save sample configuration
     """
     sample_config = {
-        'color_distance': 'ciede2000',
+        'color_distance_method': 'ciede2000_fast',
         'noise_strength': 0.5,
-        'adaptive_noise': True,
         'adaptive_strategy': 'gradient_edge',
         'alpha_method': 'dithering',
         'alpha_threshold': 0.5,
@@ -93,14 +92,19 @@ Examples:
   # Create sample configuration
   blue-noise-dither --create-config sample.yaml
   
+  # Use uniform strategy to disable adaptive noise
+  blue-noise-dither input.png output.png --palette colors.txt --blue-noise noise.png --adaptive-strategy uniform
+  
 Color distance methods:
-  rgb, weighted_rgb, cie76, cie94, ciede2000, oklab, hsv
+  rgb, weighted_rgb, cie76, cie94, ciede2000, ciede2000_fast, oklab, hsv
   
 Alpha methods:
   threshold, dithering
   
 Adaptive strategies:
-  uniform, gradient, edge, contrast, gradient_edge, gradient_contrast, edge_contrast, all
+  uniform (no adaptation - constant noise strength)
+  gradient, edge, contrast (individual strategies)
+  gradient_edge, gradient_contrast, edge_contrast, all (combination strategies)
         """
     )
     
@@ -117,27 +121,22 @@ Adaptive strategies:
     # Color distance
     parser.add_argument('--color-distance', '-c', type=str, 
                        choices=ColorDistanceCalculator.METHODS,
-                       default='weighted_rgb',
                        help='Color distance calculation method (default: weighted_rgb)')
     
     # Noise settings
-    parser.add_argument('--noise-strength', '-s', type=float, default=0.5,
+    parser.add_argument('--noise-strength', '-s', type=float,
                        help='Noise strength (0.0 to 1.0, default: 0.5)')
-    parser.add_argument('--adaptive-noise', '-a', action='store_true',
-                       help='Enable adaptive noise strength')
     parser.add_argument('--adaptive-strategy', type=str,
                        choices=BlueNoiseDitherer.ADAPTIVE_STRATEGIES,
-                       default='gradient',
-                       help='Adaptive noise strategy (default: gradient)')
+                       help='Adaptive noise strategy (default: gradient, use "uniform" to disable adaptive noise)')
     parser.add_argument('--output-noise-map', type=str,
                        help='Save noise strength map as grayscale image to specified path')
     
     # Alpha handling
     parser.add_argument('--alpha-method', type=str,
                        choices=BlueNoiseDitherer.ALPHA_METHODS,
-                       default='threshold',
                        help='Alpha channel handling method (default: threshold)')
-    parser.add_argument('--alpha-threshold', type=float, default=0.5,
+    parser.add_argument('--alpha-threshold', type=float,
                        help='Alpha threshold value (0.0 to 1.0, default: 0.5)')
     
     # Configuration
@@ -172,18 +171,16 @@ Adaptive strategies:
         if args.verbose:
             print(f"Loaded configuration from {args.config}")
     
-    # Override config with command line arguments
-    if args.color_distance:
+    # Override config with command line arguments (only if explicitly provided)
+    if args.color_distance is not None:
         config['color_distance_method'] = args.color_distance
     if args.noise_strength is not None:
         config['noise_strength'] = args.noise_strength
-    if args.adaptive_noise:
-        config['adaptive_noise'] = True
-    if args.adaptive_strategy:
+    if args.adaptive_strategy is not None:
         config['adaptive_strategy'] = args.adaptive_strategy
-    if args.output_noise_map:
+    if args.output_noise_map is not None:
         config['output_noise_map'] = args.output_noise_map
-    if args.alpha_method:
+    if args.alpha_method is not None:
         config['alpha_method'] = args.alpha_method
     if args.alpha_threshold is not None:
         config['alpha_threshold'] = args.alpha_threshold
@@ -191,7 +188,6 @@ Adaptive strategies:
     # Set defaults for missing config values
     config.setdefault('color_distance_method', 'weighted_rgb')
     config.setdefault('noise_strength', 0.5)
-    config.setdefault('adaptive_noise', False)
     config.setdefault('adaptive_strategy', 'gradient')
     config.setdefault('alpha_method', 'threshold')
     config.setdefault('alpha_threshold', 0.5)
@@ -220,7 +216,6 @@ Adaptive strategies:
         ditherer = BlueNoiseDitherer(
             color_distance_method=config['color_distance_method'],
             noise_strength=config['noise_strength'],
-            adaptive_noise=config['adaptive_noise'],
             adaptive_strategy=config['adaptive_strategy'],
             alpha_method=config['alpha_method'],
             alpha_threshold=config['alpha_threshold'],

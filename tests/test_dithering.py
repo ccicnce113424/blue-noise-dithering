@@ -185,7 +185,6 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         for strategy in BlueNoiseDitherer.ADAPTIVE_STRATEGIES:
             with self.subTest(strategy=strategy):
                 self.ditherer.adaptive_strategy = strategy
-                self.ditherer.adaptive_noise = True
                 
                 noise_map = self.ditherer._calculate_adaptive_noise(rgb_image)
                 
@@ -240,7 +239,6 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         config = {
             'color_distance_method': 'cie76',
             'noise_strength': 0.8,
-            'adaptive_noise': True,
             'adaptive_strategy': 'edge',
             'alpha_method': 'dithering',
             'alpha_threshold': 0.3
@@ -252,7 +250,6 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         
         self.assertEqual(retrieved_config['color_distance_method'], 'cie76')
         self.assertEqual(retrieved_config['noise_strength'], 0.8)
-        self.assertEqual(retrieved_config['adaptive_noise'], True)
         self.assertEqual(retrieved_config['adaptive_strategy'], 'edge')
         self.assertEqual(retrieved_config['alpha_method'], 'dithering')
         self.assertEqual(retrieved_config['alpha_threshold'], 0.3)
@@ -269,7 +266,6 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         try:
             # Set up ditherer with noise map output
             self.ditherer.output_noise_map = tmp_path
-            self.ditherer.adaptive_noise = True
             self.ditherer.adaptive_strategy = 'gradient'
             self.ditherer.blue_noise_texture = self.blue_noise_array
             
@@ -306,7 +302,6 @@ class TestBlueNoiseDitherer(unittest.TestCase):
         for strategy in combination_strategies:
             with self.subTest(strategy=strategy):
                 self.ditherer.adaptive_strategy = strategy
-                self.ditherer.adaptive_noise = True
                 
                 noise_map = self.ditherer._calculate_adaptive_noise(rgb_image)
                 
@@ -314,13 +309,65 @@ class TestBlueNoiseDitherer(unittest.TestCase):
                 self.assertTrue(np.all(noise_map >= 0))
                 self.assertTrue(np.all(noise_map <= 1))
                 
-                # Test that combination strategies produce different results than individual ones
+                # Test that combination strategies produce different results than uniform
                 self.ditherer.adaptive_strategy = 'uniform'
                 uniform_map = self.ditherer._calculate_adaptive_noise(rgb_image)
                 
                 # They should not be identical (unless the image is completely uniform)
                 if not np.allclose(noise_map, uniform_map):
                     self.assertTrue(True)  # Good, they're different
+    
+    def test_uniform_strategy_disables_adaptation(self):
+        """Test that uniform strategy acts like disabled adaptive noise."""
+        self.ditherer.blue_noise_texture = self.blue_noise_array
+        rgb_image = np.array(self.test_image)
+        
+        # Test uniform strategy
+        self.ditherer.adaptive_strategy = 'uniform'
+        uniform_map = self.ditherer._calculate_adaptive_noise(rgb_image)
+        
+        # Should be all the same value (noise_strength)
+        expected_value = self.ditherer.noise_strength
+        self.assertTrue(np.allclose(uniform_map, expected_value))
+        
+        # Should have the same shape as the image
+        self.assertEqual(uniform_map.shape, (64, 64))
+    
+    def test_config_file_loading(self):
+        """Test that configuration files are loaded and applied correctly."""
+        import tempfile
+        import yaml
+        import os
+        
+        # Create a test configuration
+        test_config = {
+            'color_distance_method': 'cie76',
+            'noise_strength': 0.8,
+            'adaptive_strategy': 'edge',
+            'alpha_method': 'dithering',
+            'alpha_threshold': 0.3
+        }
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = f.name
+        
+        try:
+            # Load configuration using CLI function
+            from blue_noise_dithering.cli import load_config
+            loaded_config = load_config(config_path)
+            
+            # Check that all values were loaded correctly
+            self.assertEqual(loaded_config['color_distance_method'], 'cie76')
+            self.assertEqual(loaded_config['noise_strength'], 0.8)
+            self.assertEqual(loaded_config['adaptive_strategy'], 'edge')
+            self.assertEqual(loaded_config['alpha_method'], 'dithering')
+            self.assertEqual(loaded_config['alpha_threshold'], 0.3)
+            
+        finally:
+            if os.path.exists(config_path):
+                os.unlink(config_path)
 
 
 if __name__ == '__main__':
