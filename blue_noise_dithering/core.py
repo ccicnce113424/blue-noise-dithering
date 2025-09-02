@@ -15,8 +15,9 @@ class BlueNoiseDitherer:
     """Main blue noise dithering processor."""
     
     ALPHA_METHODS = ['threshold', 'dithering']
-    ADAPTIVE_STRATEGIES = ['uniform', 'gradient', 'edge', 'contrast', 
-                          'gradient_edge', 'gradient_contrast', 'edge_contrast', 'all']
+    ADAPTIVE_STRATEGIES = ['uniform', 'gradient', 'edge', 'contrast', 'luminance', 'saturation',
+                          'gradient_edge', 'gradient_contrast', 'edge_contrast', 'luminance_saturation',
+                          'gradient_luminance', 'gradient_saturation', 'all', 'all_perceptual']
     
     def __init__(self, 
                  color_distance_method: str = 'weighted_rgb',
@@ -255,6 +256,22 @@ class BlueNoiseDitherer:
                 noise_map = self.noise_strength * (1.0 - contrast_map * 0.6)
                 return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
             
+            elif self.adaptive_strategy == 'luminance':
+                # Use perceptual luminance for adaptive noise
+                luminance_map = self._calculate_luminance_map_optimized(rgb_image)
+                pbar.update(100)
+                # Higher noise in mid-tones (luminance_map values are higher for mid-tones)
+                noise_map = self.noise_strength * luminance_map
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'saturation':
+                # Use color saturation for adaptive noise
+                saturation_map = self._calculate_saturation_map_optimized(rgb_image)
+                pbar.update(100)
+                # Higher noise in low saturation areas (inverted saturation)
+                noise_map = self.noise_strength * saturation_map
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
             elif self.adaptive_strategy == 'gradient_edge':
                 # Combine gradient and edge detection
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
@@ -285,8 +302,41 @@ class BlueNoiseDitherer:
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.7)
                 return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
+            elif self.adaptive_strategy == 'luminance_saturation':
+                # Combine luminance and saturation
+                luminance_map = self._calculate_luminance_map_optimized(rgb_image)
+                pbar.update(50)
+                saturation_map = self._calculate_saturation_map_optimized(rgb_image)
+                pbar.update(50)
+                # Both maps already emphasize areas that benefit from dithering
+                combined_map = (luminance_map + saturation_map) / 2.0
+                noise_map = self.noise_strength * combined_map
+                return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'gradient_luminance':
+                # Combine gradient and luminance
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(50)
+                luminance_map = self._calculate_luminance_map_optimized(rgb_image)
+                pbar.update(50)
+                # Combine structure (gradient) with perceptual importance (luminance)
+                combined_map = gradient_map * 0.4 + luminance_map * 0.6
+                noise_map = self.noise_strength * combined_map
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'gradient_saturation':
+                # Combine gradient and saturation
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(50)
+                saturation_map = self._calculate_saturation_map_optimized(rgb_image)
+                pbar.update(50)
+                # Combine structure (gradient) with color information (saturation)
+                combined_map = gradient_map * 0.4 + saturation_map * 0.6
+                noise_map = self.noise_strength * combined_map
+                return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
+            
             elif self.adaptive_strategy == 'all':
-                # Combine all three strategies
+                # Combine all three original strategies
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
                 pbar.update(33)
                 edge_map = self._calculate_edge_map_optimized(rgb_image)
@@ -296,6 +346,28 @@ class BlueNoiseDitherer:
                 combined_map = (gradient_map + edge_map + contrast_map) / 3.0
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.6)
                 return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
+            
+            elif self.adaptive_strategy == 'all_perceptual':
+                # Combine all strategies including perceptual ones
+                gradient_map = self._calculate_gradient_map_optimized(rgb_image)
+                pbar.update(20)
+                edge_map = self._calculate_edge_map_optimized(rgb_image)
+                pbar.update(20)
+                contrast_map = self._calculate_contrast_map_optimized(rgb_image)
+                pbar.update(20)
+                luminance_map = self._calculate_luminance_map_optimized(rgb_image)
+                pbar.update(20)
+                saturation_map = self._calculate_saturation_map_optimized(rgb_image)
+                pbar.update(20)
+                
+                # Combine structural features (reduced noise) with perceptual features (enhanced noise)
+                structural_combined = (gradient_map + edge_map + contrast_map) / 3.0
+                perceptual_combined = (luminance_map + saturation_map) / 2.0
+                
+                # Balance structural preservation with perceptual enhancement
+                final_map = structural_combined * 0.4 + perceptual_combined * 0.6
+                noise_map = self.noise_strength * final_map
+                return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
             else:
                 pbar.update(100)
@@ -377,6 +449,53 @@ class BlueNoiseDitherer:
         
         return contrast
     
+    def _calculate_luminance_map_optimized(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate perceptual luminance map using optimized operations.
+        
+        Args:
+            rgb_image: RGB image array of shape (H, W, 3) with values in [0, 255]
+            
+        Returns:
+            Normalized luminance map (0-1) where mid-tones have higher values
+        """
+        # Convert RGB to perceptual luminance using ITU-R BT.709 weights
+        luminance = (0.2126 * rgb_image[:, :, 0] + 
+                    0.7152 * rgb_image[:, :, 1] + 
+                    0.0722 * rgb_image[:, :, 2]) / 255.0
+        
+        # Create a map that emphasizes mid-tones for dithering
+        # Mid-tones (around 0.5 luminance) benefit most from dithering
+        # Highlights and shadows need less noise to preserve detail
+        mid_tone_emphasis = 1.0 - 4.0 * (luminance - 0.5)**2
+        mid_tone_emphasis = np.clip(mid_tone_emphasis, 0.0, 1.0)
+        
+        return mid_tone_emphasis
+    
+    def _calculate_saturation_map_optimized(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Calculate color saturation map using optimized operations.
+        
+        Args:
+            rgb_image: RGB image array of shape (H, W, 3) with values in [0, 255]
+            
+        Returns:
+            Normalized saturation map (0-1) where low saturation areas have higher values
+        """
+        # Normalize RGB values to [0, 1]
+        rgb_norm = rgb_image / 255.0
+        
+        # Calculate saturation using HSV model - saturation = (max - min) / max
+        max_rgb = np.max(rgb_norm, axis=2)
+        min_rgb = np.min(rgb_norm, axis=2)
+        
+        # Avoid division by zero
+        saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0.0)
+        
+        # Invert saturation map: low saturation (grayscale-like) areas benefit more from dithering
+        # High saturation areas have clear color information that should be preserved
+        inverted_saturation = 1.0 - saturation
+        
+        return inverted_saturation
+    
     # Keep original methods as fallbacks for compatibility
     def _calculate_gradient_map(self, rgb_image: np.ndarray) -> np.ndarray:
         """Fallback gradient calculation (for compatibility)."""
@@ -389,6 +508,14 @@ class BlueNoiseDitherer:
     def _calculate_contrast_map(self, rgb_image: np.ndarray) -> np.ndarray:
         """Fallback contrast calculation (for compatibility)."""
         return self._calculate_contrast_map_optimized(rgb_image)
+    
+    def _calculate_luminance_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Fallback luminance calculation (for compatibility)."""
+        return self._calculate_luminance_map_optimized(rgb_image)
+    
+    def _calculate_saturation_map(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Fallback saturation calculation (for compatibility)."""
+        return self._calculate_saturation_map_optimized(rgb_image)
     
     def _save_noise_strength_map(self, noise_map: np.ndarray, filepath: str) -> None:
         """Save noise strength map as a grayscale image.
