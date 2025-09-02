@@ -169,7 +169,7 @@ class BlueNoiseDitherer:
                 noisy_rgb = np.clip(noisy_rgb, 0, 255)
                 
                 # Find closest palette colors
-                palette_indices = self._find_closest_colors(noisy_rgb)
+                palette_indices = self._find_closest_colors(noisy_rgb, show_progress=False)
                 chunk_output_rgb = self.palette[palette_indices]
                 
                 # Handle alpha channel
@@ -411,17 +411,18 @@ class BlueNoiseDitherer:
         except Exception as e:
             print(f"Warning: Could not save noise strength map to {filepath}: {e}")
     
-    def _find_closest_colors(self, colors: np.ndarray) -> np.ndarray:
+    def _find_closest_colors(self, colors: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Find closest palette colors for a batch of colors.
         
         Args:
             colors: Array of colors to match, shape (N, 3)
+            show_progress: Whether to show progress for expensive color distance methods
             
         Returns:
             Array of palette indices, shape (N,)
         """
         # Calculate distances to all palette colors
-        distances = self.color_calculator.calculate_distances_batch(colors, self.palette)
+        distances = self.color_calculator.calculate_distances_batch(colors, self.palette, show_progress)
         
         # Find indices of closest colors
         closest_indices = np.argmin(distances, axis=1)
