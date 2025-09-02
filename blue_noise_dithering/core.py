@@ -274,42 +274,46 @@ class BlueNoiseDitherer:
             
             elif self.adaptive_strategy == 'gradient_edge':
                 # Combine gradient and edge detection
+                # Gradient is more comprehensive than edge detection, so give it higher weight
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
                 pbar.update(50)
                 edge_map = self._calculate_edge_map_optimized(rgb_image)
                 pbar.update(50)
-                combined_map = (gradient_map + edge_map) / 2.0
+                combined_map = gradient_map * 0.7 + edge_map * 0.3
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.75)
                 return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
             
             elif self.adaptive_strategy == 'gradient_contrast':
                 # Combine gradient and contrast
+                # Gradient provides structural detail, contrast provides texture information
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
                 pbar.update(50)
                 contrast_map = self._calculate_contrast_map_optimized(rgb_image)
                 pbar.update(50)
-                combined_map = (gradient_map + contrast_map) / 2.0
+                combined_map = gradient_map * 0.6 + contrast_map * 0.4
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.65)
                 return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
             elif self.adaptive_strategy == 'edge_contrast':
                 # Combine edge and contrast
+                # Balance edge detection and contrast analysis for comprehensive detail preservation
                 edge_map = self._calculate_edge_map_optimized(rgb_image)
                 pbar.update(50)
                 contrast_map = self._calculate_contrast_map_optimized(rgb_image)
                 pbar.update(50)
-                combined_map = (edge_map + contrast_map) / 2.0
+                combined_map = edge_map * 0.55 + contrast_map * 0.45
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.7)
                 return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
             elif self.adaptive_strategy == 'luminance_saturation':
                 # Combine luminance and saturation
+                # Luminance provides better perceptual importance weighting
                 luminance_map = self._calculate_luminance_map_optimized(rgb_image)
                 pbar.update(50)
                 saturation_map = self._calculate_saturation_map_optimized(rgb_image)
                 pbar.update(50)
                 # Both maps already emphasize areas that benefit from dithering
-                combined_map = (luminance_map + saturation_map) / 2.0
+                combined_map = luminance_map * 0.6 + saturation_map * 0.4
                 noise_map = self.noise_strength * combined_map
                 return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
@@ -336,14 +340,15 @@ class BlueNoiseDitherer:
                 return np.clip(noise_map, 0.1 * self.noise_strength, self.noise_strength)
             
             elif self.adaptive_strategy == 'all':
-                # Combine all three original strategies
+                # Combine all three original strategies with weighted importance
+                # Gradient is most comprehensive, edge and contrast provide complementary information
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
                 pbar.update(33)
                 edge_map = self._calculate_edge_map_optimized(rgb_image)
                 pbar.update(33)
                 contrast_map = self._calculate_contrast_map_optimized(rgb_image)
                 pbar.update(34)
-                combined_map = (gradient_map + edge_map + contrast_map) / 3.0
+                combined_map = gradient_map * 0.5 + edge_map * 0.25 + contrast_map * 0.25
                 noise_map = self.noise_strength * (1.0 - combined_map * 0.6)
                 return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
             
