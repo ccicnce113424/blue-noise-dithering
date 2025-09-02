@@ -63,12 +63,18 @@ The adaptive noise system adjusts noise strength based on image content for bett
 - `gradient`: Reduces noise in high-gradient areas (preserves detail)
 - `edge`: Reduces noise on detected edges (preserves sharp transitions) 
 - `contrast`: Reduces noise in high-contrast areas (preserves texture detail)
+- `luminance`: Emphasizes mid-tones for better perceptual dithering quality
+- `saturation`: Increases noise in low-saturation (grayscale-like) areas
 
 ### Combination Strategies
 - `gradient_edge`: Combines gradient and edge detection for comprehensive detail preservation
 - `gradient_contrast`: Combines gradient and contrast for balanced detail and texture preservation
 - `edge_contrast`: Combines edge and contrast detection for sharp detail preservation
-- `all`: Combines all three individual strategies for maximum detail preservation
+- `luminance_saturation`: Combines perceptual luminance and saturation analysis
+- `gradient_luminance`: Balances structural detail with perceptual importance
+- `gradient_saturation`: Balances structural detail with color saturation
+- `all`: Combines all three original structural strategies for maximum detail preservation
+- `all_perceptual`: Combines all structural and perceptual strategies for optimal results
 
 ### Usage Examples
 
@@ -86,6 +92,22 @@ python -m blue_noise_dithering.cli input.png output.png \
     --palette palette.txt \
     --blue-noise noise.png \
     --adaptive-strategy uniform
+```
+
+Use perceptual strategies for better luminance handling:
+```bash
+python -m blue_noise_dithering.cli input.png output.png \
+    --palette palette.txt \
+    --blue-noise noise.png \
+    --adaptive-strategy luminance
+```
+
+Combine all perceptual strategies for optimal results:
+```bash
+python -m blue_noise_dithering.cli input.png output.png \
+    --palette palette.txt \
+    --blue-noise noise.png \
+    --adaptive-strategy all_perceptual
 ```
 
 ## Noise Strength Map Output
