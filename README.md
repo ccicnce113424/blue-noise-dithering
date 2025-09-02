@@ -41,23 +41,30 @@ python -m blue_noise_dithering.cli input.png output.png \
 
 ## Color Distance Methods
 
-- `rgb`: Standard RGB Euclidean distance
-- `weighted_rgb`: Weighted RGB with perceptual weights
-- `cie76`: CIE76 Delta E
-- `cie94`: CIE94 Delta E  
-- `ciede2000`: CIEDE2000 Delta E (default)
-- `oklab`: Oklab perceptual color space
-- `hsv`: HSV color space distance
+- `rgb`: Standard RGB Euclidean distance (fast)
+- `weighted_rgb`: Weighted RGB with perceptual weights (fast, recommended)
+- `cie76`: CIE76 Delta E (moderate speed)
+- `cie94`: CIE94 Delta E (slower)
+- `ciede2000`: CIEDE2000 Delta E (most accurate, very slow)
+- `oklab`: Oklab perceptual color space (moderate speed)
+- `hsv`: HSV color space distance (fast)
 
 ## Configuration File
 
 Example `config.yaml`:
 
 ```yaml
-color_distance: ciede2000
+color_distance: weighted_rgb
 noise_strength: 0.5
 adaptive_noise: true
 adaptive_strategy: gradient
 alpha_method: dithering
 alpha_threshold: 0.5
 ```
+
+## Performance Notes
+
+- For best speed: Use `rgb` or `weighted_rgb` color distance methods
+- For best quality: Use `ciede2000` (much slower but most perceptually accurate)
+- For balanced performance: Use `cie76` or `oklab`
+- CIEDE2000 calculation can be very slow on large images due to complex color space conversions

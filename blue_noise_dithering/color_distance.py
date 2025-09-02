@@ -12,7 +12,7 @@ class ColorDistanceCalculator:
         'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'oklab', 'hsv'
     ]
     
-    def __init__(self, method: str = 'ciede2000'):
+    def __init__(self, method: str = 'weighted_rgb'):
         """Initialize with specified distance method.
         
         Args:

@@ -1,0 +1,8 @@
+adaptive_noise: true
+adaptive_strategy: gradient
+alpha_method: threshold
+alpha_threshold: 0.5
+blue_noise_file: examples/blue_noise.png
+color_distance_method: weighted_rgb
+noise_strength: 0.5
+palette_file: examples/sample_palette.txt
