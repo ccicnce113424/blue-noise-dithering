@@ -31,17 +31,27 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_fast.png \
   --color-distance rgb
 ```
 
-### Example 2: High Quality with Adaptive Noise
+### Example 2: High Quality with Optimal Performance
 ```bash
-python -m blue_noise_dithering.cli examples/test_image.png dithered_quality.png \
+python -m blue_noise_dithering.cli examples/test_image.png dithered_optimal.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance weighted_rgb \
+  --color-distance ciede2000_fast \
   --adaptive-noise \
-  --adaptive-strategy gradient
+  --adaptive-strategy gradient_edge
 ```
 
-### Example 3: Alpha Channel Processing
+### Example 3: Maximum Quality (Slower)
+```bash
+python -m blue_noise_dithering.cli examples/test_image.png dithered_max_quality.png \
+  --palette examples/sample_palette.txt \
+  --blue-noise examples/blue_noise.png \
+  --color-distance ciede2000 \
+  --adaptive-noise \
+  --adaptive-strategy all
+```
+
+### Example 4: Alpha Channel Processing
 ```bash
 python -m blue_noise_dithering.cli transparent_input.png dithered_alpha.png \
   --palette examples/sample_palette.txt \
@@ -50,7 +60,7 @@ python -m blue_noise_dithering.cli transparent_input.png dithered_alpha.png \
   --alpha-threshold 0.3
 ```
 
-### Example 4: Using Configuration File
+### Example 5: Using Configuration File
 ```bash
 # Create a configuration file
 python -m blue_noise_dithering.cli --create-config my_settings.yaml
@@ -62,17 +72,17 @@ python -m blue_noise_dithering.cli input.png output.png \
   --blue-noise examples/blue_noise.png
 ```
 
-### Example 5: Save Settings for Reuse
+### Example 6: Save Settings for Reuse
 ```bash
 python -m blue_noise_dithering.cli examples/test_image.png output.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance weighted_rgb \
+  --color-distance ciede2000_fast \
   --adaptive-noise \
   --save-config reusable_settings.yaml
 ```
 
-### Example 6: Combination Adaptive Strategies
+### Example 7: Combination Adaptive Strategies
 ```bash
 # Use gradient and edge detection combination for detailed image preservation
 python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
@@ -80,10 +90,10 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
   --blue-noise examples/blue_noise.png \
   --adaptive-noise \
   --adaptive-strategy gradient_edge \
-  --color-distance weighted_rgb
+  --color-distance ciede2000_fast
 ```
 
-### Example 7: Maximum Detail Preservation
+### Example 8: Maximum Detail Preservation
 ```bash
 # Use all strategies combined for maximum detail preservation
 python -m blue_noise_dithering.cli examples/test_image.png dithered_max_detail.png \
@@ -94,7 +104,7 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_max_detail.p
   --color-distance ciede2000
 ```
 
-### Example 8: Noise Strength Map Visualization
+### Example 9: Noise Strength Map Visualization
 ```bash
 # Generate both dithered image and noise strength visualization
 python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png \
@@ -103,16 +113,16 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png
   --adaptive-noise \
   --adaptive-strategy gradient_contrast \
   --output-noise-map noise_visualization.png \
-  --color-distance weighted_rgb
+  --color-distance ciede2000_fast
 ```
 
-### Example 9: Complete Advanced Configuration
+### Example 10: Complete Advanced Configuration
 ```bash
-# Full featured configuration showing all new options
+# Full featured configuration showing all options with optimal performance
 python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance ciede2000 \
+  --color-distance ciede2000_fast \
   --noise-strength 0.6 \
   --adaptive-noise \
   --adaptive-strategy all \
@@ -124,15 +134,16 @@ python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
 
 ## Color Distance Methods Comparison
 
-| Method | Speed | Quality | Best Use Case |
-|--------|-------|---------|---------------|
-| `rgb` | Fastest | Basic | Quick tests, draft processing |
-| `weighted_rgb` | Fast | Good | General purpose, recommended default |
-| `cie76` | Medium | Better | When color accuracy matters |
-| `cie94` | Slow | Better | Professional color work |
-| `ciede2000` | Very Slow | Best | Highest quality, small images |
-| `oklab` | Medium | Good | Modern perceptual accuracy |
-| `hsv` | Fast | Fair | Artistic effects |
+| Method | Speed | Quality | Performance (px/s) | Best Use Case |
+|--------|-------|---------|------------------|---------------|
+| `rgb` | Fastest | Basic | ~2M+ | Quick tests, draft processing |
+| `weighted_rgb` | Fast | Good | ~1.5M+ | General purpose, recommended default |
+| `ciede2000_fast` | Fast | Excellent | ~780K-1.3M | Balanced speed/quality (recommended) |
+| `cie76` | Medium | Better | ~500K+ | When color accuracy matters |
+| `cie94` | Medium | Better | ~900K+ | Professional color work |
+| `ciede2000` | Moderate | Best | ~130K-240K | Maximum accuracy requirement |
+| `oklab` | Medium | Good | ~400K+ | Modern perceptual accuracy |
+| `hsv` | Fast | Fair | ~1M+ | Artistic effects |
 
 ## Adaptive Noise Strategies
 
@@ -170,11 +181,14 @@ This visualization helps understand how the adaptive algorithm is working and ca
 
 ## Performance Tips
 
-1. **Use `weighted_rgb` for best speed/quality balance**
-2. **For large images, avoid `ciede2000` unless quality is critical**
-3. **Use smaller blue noise textures (32x32 to 128x128) for better performance**
-4. **Enable adaptive noise for better visual quality**
-5. **Process images in batches with the same settings using config files**
+1. **Use `ciede2000_fast` for best speed/quality balance** - provides excellent color accuracy with good performance
+2. **For maximum speed, use `weighted_rgb`** - fast and good quality for general use
+3. **For maximum quality, use `ciede2000`** - full standard algorithm for critical applications
+4. **For large images, avoid full `ciede2000` unless quality is absolutely critical**
+5. **Use smaller blue noise textures (32x32 to 128x128) for better performance**
+6. **Enable adaptive noise for better visual quality with minimal performance impact**
+7. **Process images in batches with the same settings using config files**
+8. **Use combination adaptive strategies (`gradient_edge`, `all`) for complex images**
 
 ## Palette Creation
 

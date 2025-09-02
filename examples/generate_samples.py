@@ -106,7 +106,19 @@ def main():
     print(f"python -m blue_noise_dithering.cli {test_image_path} dithered_output.png \\")
     print(f"    --palette {os.path.join(examples_dir, 'sample_palette.txt')} \\")
     print(f"    --blue-noise {blue_noise_path} \\")
-    print("    --color-distance ciede2000 --adaptive-noise")
+    print("    --color-distance ciede2000_fast --adaptive-noise --adaptive-strategy gradient_edge")
+    
+    print("\nFor maximum quality:")
+    print(f"python -m blue_noise_dithering.cli {test_image_path} dithered_max_quality.png \\")
+    print(f"    --palette {os.path.join(examples_dir, 'sample_palette.txt')} \\")
+    print(f"    --blue-noise {blue_noise_path} \\")
+    print("    --color-distance ciede2000 --adaptive-noise --adaptive-strategy all")
+    
+    print("\nFor maximum speed:")
+    print(f"python -m blue_noise_dithering.cli {test_image_path} dithered_fast.png \\")
+    print(f"    --palette {os.path.join(examples_dir, 'sample_palette.txt')} \\")
+    print(f"    --blue-noise {blue_noise_path} \\")
+    print("    --color-distance weighted_rgb")
 
 
 if __name__ == '__main__':
