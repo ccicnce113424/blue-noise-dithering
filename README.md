@@ -77,7 +77,7 @@ These strategies use weighted combinations of individual techniques to provide o
 - `gradient_luminance`: Balances structural detail (40%) with perceptual importance (60%). Already optimally weighted.
 - `gradient_saturation`: Balances structural detail (40%) with color saturation (60%). Already optimally weighted.
 - `all`: Combines gradient (50%), edge (25%), and contrast (25%) for maximum detail preservation. Gradient is most reliable, others provide complementary information.
-- `all_perceptual`: Combines all structural and perceptual strategies for optimal results. Already optimally weighted.
+- `all_perceptual`: Combines all structural and perceptual strategies with optimized weights. Structural features: gradient (50%), edge (25%), contrast (25%). Perceptual features: luminance (65%), saturation (35%). Overall balance: structural (45%) + perceptual (55%) for enhanced dithering quality.
 
 ### Usage Examples
 

@@ -353,7 +353,7 @@ class BlueNoiseDitherer:
                 return np.clip(noise_map, 0.2 * self.noise_strength, self.noise_strength)
             
             elif self.adaptive_strategy == 'all_perceptual':
-                # Combine all strategies including perceptual ones
+                # Combine all strategies including perceptual ones with optimized weights
                 gradient_map = self._calculate_gradient_map_optimized(rgb_image)
                 pbar.update(20)
                 edge_map = self._calculate_edge_map_optimized(rgb_image)
@@ -365,12 +365,13 @@ class BlueNoiseDitherer:
                 saturation_map = self._calculate_saturation_map_optimized(rgb_image)
                 pbar.update(20)
                 
-                # Combine structural features (reduced noise) with perceptual features (enhanced noise)
-                structural_combined = (gradient_map + edge_map + contrast_map) / 3.0
-                perceptual_combined = (luminance_map + saturation_map) / 2.0
+                # Optimized weights: gradient is most comprehensive for structural features
+                # Luminance is more perceptually important than saturation
+                structural_combined = gradient_map * 0.5 + edge_map * 0.25 + contrast_map * 0.25
+                perceptual_combined = luminance_map * 0.65 + saturation_map * 0.35
                 
-                # Balance structural preservation with perceptual enhancement
-                final_map = structural_combined * 0.4 + perceptual_combined * 0.6
+                # Balanced structural preservation with enhanced perceptual weighting
+                final_map = structural_combined * 0.45 + perceptual_combined * 0.55
                 noise_map = self.noise_strength * final_map
                 return np.clip(noise_map, 0.15 * self.noise_strength, self.noise_strength)
             
