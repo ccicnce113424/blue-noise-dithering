@@ -205,3 +205,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Blue noise dithering specific
+# Generated config files
+*_config.yaml
+final_config.yaml
+test_config.yaml
+
+# Generated example images (can be recreated)
+examples/dithered_*.png
+examples/output_*.png
+
+# Test outputs
+output_*.png
+test_*.png
