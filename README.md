@@ -35,7 +35,7 @@ python -m blue_noise_dithering.cli input.png output.png --palette palette.txt --
 python -m blue_noise_dithering.cli input.png output.png \
     --palette palette.txt \
     --blue-noise noise.png \
-    --color-distance ciede2000_fast \
+    --color-distance compuphase \
     --noise-strength 0.5 \
     --adaptive-strategy gradient_edge \
     --alpha-method dithering \
@@ -49,8 +49,8 @@ python -m blue_noise_dithering.cli input.png output.png \
 - `weighted_rgb`: Weighted RGB with perceptual weights (fast, recommended for general use)
 - `cie76`: CIE76 Delta E (moderate speed, good accuracy)
 - `cie94`: CIE94 Delta E (moderate speed, better accuracy)
+- `compuphase`: Low-cost perceptual approximation (very fast, good accuracy for most use cases)
 - `ciede2000`: Full standard CIEDE2000 Delta E (best accuracy, moderate speed)
-- `ciede2000_fast`: Optimized CIEDE2000 implementation (fast, excellent accuracy)
 - `oklab`: Oklab perceptual color space (fast, modern accuracy)
 - `hsv`: HSV color space distance (fast, for artistic effects)
 - `compuphase`: Low-cost perceptual approximation (very fast, good accuracy for most use cases)
@@ -148,17 +148,16 @@ output_noise_map: noise_strength_map.png
 
 **Recommended configurations by use case:**
 
-- **Fast processing**: Use `compuphase`, `weighted_rgb` or `ciede2000_fast` color distance methods
+- **Fast processing**: Use `compuphase` or `weighted_rgb` color distance methods
 - **High quality**: Use `ciede2000` (full standard algorithm) for maximum perceptual accuracy  
-- **Balanced performance**: Use `compuphase` or `ciede2000_fast` - provides excellent color accuracy with good speed
-- **Large images**: Use `compuphase`, `ciede2000_fast` or `weighted_rgb` to maintain reasonable processing times
+- **Balanced performance**: Use `compuphase` - provides excellent color accuracy with good speed
+- **Large images**: Use `compuphase` or `weighted_rgb` to maintain reasonable processing times
 - **Small images/highest quality**: Use `ciede2000` (full standard) for maximum accuracy
 
 **Performance comparison** (approximate processing speeds):
 - `rgb`: ~2M+ px/s
 - `compuphase`: ~2.5M+ px/s (fast perceptual approximation)
 - `weighted_rgb`: ~1.5M+ px/s  
-- `ciede2000_fast`: ~780K-1.3M px/s (4-6x faster than standard)
 - `ciede2000`: ~130K-240K px/s (full accuracy)
 - `cie94`: ~900K+ px/s
 - `oklab`: ~400K+ px/s
