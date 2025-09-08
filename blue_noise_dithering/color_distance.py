@@ -11,7 +11,7 @@ class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'cam16_ucs', 'oklab', 'hsv', 'compuphase'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -48,8 +48,8 @@ class ColorDistanceCalculator:
             return self._cie94_distance(color1, color2)
         elif self.method == 'ciede2000':
             return self._ciede2000_distance(color1, color2)
-        elif self.method == 'ciede2000_fast':
-            return self._ciede2000_fast_distance(color1, color2)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance(color1, color2)
         elif self.method == 'oklab':
             return self._oklab_distance(color1, color2)
         elif self.method == 'hsv':
@@ -86,8 +86,8 @@ class ColorDistanceCalculator:
             return self._cie94_distance_batch(colors, palette)
         elif self.method == 'ciede2000':
             return self._ciede2000_distance_batch(colors, palette, show_progress)
-        elif self.method == 'ciede2000_fast':
-            return self._ciede2000_fast_distance_batch(colors, palette, show_progress)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance_batch(colors, palette)
         elif self.method == 'oklab':
             return self._oklab_distance_batch(colors, palette)
         elif self.method == 'hsv':
@@ -271,13 +271,7 @@ class ColorDistanceCalculator:
         
         return delta_e
     
-    def _ciede2000_fast_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
-        """Fast simplified CIEDE2000 Delta E distance."""
-        lab1 = self._rgb_to_lab(color1)
-        lab2 = self._rgb_to_lab(color2)
-        
-        # Use fast vectorized implementation for single color pair
-        return self._ciede2000_fast_single(lab1, lab2)
+
     
     def _ciede2000_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
         """Standard CIEDE2000 Delta E distance following CIE specification."""
@@ -306,104 +300,11 @@ class ColorDistanceCalculator:
         # Use standard CIEDE2000 implementation
         return self._ciede2000_standard_vectorized(colors_lab, palette_lab, show_progress)
     
-    def _ciede2000_fast_distance_batch(self, colors: np.ndarray, palette: np.ndarray, show_progress: bool = True) -> np.ndarray:
-        """Batch fast CIEDE2000 distance calculation using simplified algorithm."""
-        # Check cache for palette LAB conversion
-        if 'ciede2000_fast_palette' not in self._palette_cache:
-            self._palette_cache['ciede2000_fast_palette'] = self._rgb_to_lab_batch(palette)
-        
-        # Convert colors to LAB
-        colors_lab = self._rgb_to_lab_batch(colors)
-        palette_lab = self._palette_cache['ciede2000_fast_palette']
-        
-        n_colors = len(colors)
-        n_palette = len(palette)
-        
-        if show_progress:
-            print(f"Computing fast CIEDE2000 for {n_colors} colors vs {n_palette} palette colors...")
-        
-        # Use fast vectorized implementation
-        return self._ciede2000_fast_vectorized(colors_lab, palette_lab, show_progress)
+
     
-    def _ciede2000_fast_vectorized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
-        """Fast simplified CIEDE2000 implementation (previously used as main implementation)."""
-        n_colors = len(colors_lab)
-        n_palette = len(palette_lab)
-        
-        # Process in parallel chunks for maximum performance
-        chunk_size = min(1000, n_colors)  # Balance memory vs performance
-        distances = np.zeros((n_colors, n_palette))
-        
-        # Only show progress bar if requested (avoid conflicts with main progress bar)
-        with tqdm(total=n_colors, desc="CIEDE2000 Fast", unit="px", disable=not show_progress) as pbar:
-            for start_idx in range(0, n_colors, chunk_size):
-                end_idx = min(start_idx + chunk_size, n_colors)
-                chunk_colors = colors_lab[start_idx:end_idx]
-                
-                # Vectorized calculation for this chunk
-                chunk_distances = self._ciede2000_fast_chunk_vectorized(chunk_colors, palette_lab)
-                distances[start_idx:end_idx] = chunk_distances
-                
-                if show_progress:
-                    pbar.update(end_idx - start_idx)
-        
-        return distances
+
     
-    def _ciede2000_fast_chunk_vectorized(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
-        """Vectorized fast CIEDE2000 calculation for a chunk of colors (simplified algorithm)."""
-        n_colors = len(colors)
-        n_palette = len(palette)
-        
-        # Reshape for broadcasting
-        colors_exp = colors[:, np.newaxis, :]  # (n_colors, 1, 3)
-        palette_exp = palette[np.newaxis, :, :]  # (1, n_palette, 3)
-        
-        # Extract L*, a*, b* values
-        L1 = colors_exp[:, :, 0]
-        a1 = colors_exp[:, :, 1]
-        b1 = colors_exp[:, :, 2]
-        
-        L2 = palette_exp[:, :, 0]
-        a2 = palette_exp[:, :, 1]
-        b2 = palette_exp[:, :, 2]
-        
-        # Calculate differences
-        dL = L2 - L1
-        da = a2 - a1
-        db = b2 - b1
-        
-        # Calculate chroma values
-        C1 = np.sqrt(a1**2 + b1**2)
-        C2 = np.sqrt(a2**2 + b2**2)
-        dC = C2 - C1
-        C_avg = (C1 + C2) / 2.0
-        
-        # Calculate hue values (simplified but fast)
-        h1 = np.arctan2(b1, a1)
-        h2 = np.arctan2(b2, a2)
-        
-        # Hue difference calculation (simplified)
-        dh = h2 - h1
-        dh = np.where(dh > np.pi, dh - 2*np.pi, dh)
-        dh = np.where(dh < -np.pi, dh + 2*np.pi, dh)
-        dH = 2 * np.sqrt(C1 * C2) * np.sin(dh / 2)
-        
-        # Average values for weighting
-        L_avg = (L1 + L2) / 2.0
-        
-        # Simplified weighting functions (faster approximation)
-        SL = 1.0 + (0.015 * (L_avg - 50)**2) / np.sqrt(20 + (L_avg - 50)**2)
-        SC = 1.0 + 0.045 * C_avg
-        SH = 1.0 + 0.015 * C_avg
-        
-        # Final CIEDE2000 calculation (simplified but accurate)
-        delta_E = np.sqrt(
-            (dL / SL)**2 + 
-            (dC / SC)**2 + 
-            (dH / SH)**2
-        )
-        
-        return delta_E
+
     
     def _ciede2000_standard_vectorized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Standard CIEDE2000 implementation following CIE specification."""
@@ -555,27 +456,229 @@ class ColorDistanceCalculator:
         result = self._ciede2000_standard_chunk_vectorized(lab1_batch, lab2_batch)
         return float(result[0, 0])
     
-    def _ciede2000_fast_single(self, lab1: np.ndarray, lab2: np.ndarray) -> float:
-        """Fast CIEDE2000 calculation for single color pair."""
-        # Use the vectorized version for single pair
-        lab1_batch = lab1.reshape(1, 3)
-        lab2_batch = lab2.reshape(1, 3)
-        result = self._ciede2000_fast_chunk_vectorized(lab1_batch, lab2_batch)
-        return float(result[0, 0])
+    def _rgb_to_xyz_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of RGB colors to XYZ color space efficiently.
+        
+        Args:
+            rgb_batch: Array of RGB colors shape (N, 3) in 0-255 range
+            
+        Returns:
+            Array of XYZ colors shape (N, 3)
+        """
+        # Normalize to 0-1 range
+        rgb_normalized = rgb_batch / 255.0
+        
+        # Convert to linear RGB (vectorized)
+        def gamma_to_linear(c):
+            return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+        
+        linear_rgb = gamma_to_linear(rgb_normalized)
+        
+        # sRGB to XYZ conversion matrix (D65 illuminant)
+        m = np.array([
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041]
+        ])
+        
+        xyz = linear_rgb @ m.T
+        return xyz
     
-
+    def _rgb_to_xyz(self, rgb: np.ndarray) -> np.ndarray:
+        """Convert RGB to XYZ color space."""
+        # Use the batch version for single color
+        return self._rgb_to_xyz_batch(rgb.reshape(1, 3))[0]
     
-
+    def _xyz_to_cam16_batch(self, xyz_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of XYZ colors to CAM16 color appearance coordinates.
+        
+        Args:
+            xyz_batch: Array of XYZ colors shape (N, 3)
+            
+        Returns:
+            Array of CAM16 coordinates shape (N, 3) as [J, C, h]
+        """
+        # CAM16 viewing conditions (typical indoor conditions)
+        # D65 white point
+        Xw, Yw, Zw = 95.047, 100.000, 108.883
+        # Luminance of white point (cd/m²)
+        Lw = 100.0
+        # Luminance of background (cd/m²)  
+        Yb = 20.0
+        # Surround conditions: 1=average, 0.9=dim, 0.8=dark
+        c = 0.69  # impact of surround
+        Nc = 1.0  # chromatic induction factor
+        
+        # Viewing flare
+        F = 1.0  # maximum flare
+        
+        # Calculate adapting luminance
+        LA = Lw * Yb / 100.0
+        
+        # Calculate degree of adaptation
+        k = 1.0 / (5.0 * LA + 1.0)
+        FL = 0.2 * (k ** 4) * (5.0 * LA) + 0.1 * ((1.0 - k ** 4) ** 2) * ((5.0 * LA) ** (1.0/3.0))
+        
+        # Ensure FL is positive
+        FL = np.maximum(FL, 0.01)
+        
+        n = Yb / Yw
+        z = 1.48 + np.sqrt(n)
+        Nbb = 0.725 * (1.0 / n) ** 0.2
+        Ncb = Nbb
+        
+        # CAM16 forward transformation
+        # Step 1: Convert to cone responses
+        # CAT16 transformation matrix
+        MCAT16 = np.array([
+            [ 0.401288, 0.650173, -0.051461],
+            [-0.250268, 1.204414,  0.045854], 
+            [-0.002079, 0.048952,  0.953127]
+        ])
+        
+        # Convert XYZ to CAT16 space
+        # Normalize XYZ (assuming input is already in 0-100 range for Y)
+        xyz_normalized = xyz_batch * np.array([Xw/100.0, Yw/100.0, Zw/100.0])
+        rgb_cat16 = xyz_normalized @ MCAT16.T
+        
+        # Step 2: Calculate degree of adaptation
+        # White point in CAT16
+        rgb_w = np.array([Xw, Yw, Zw]) @ MCAT16.T
+        
+        # Adapted cone responses
+        D = F * (1.0 - (1.0/3.6) * np.exp((-LA - 42.0) / 92.0))
+        D = np.clip(D, 0.0, 1.0)
+        
+        # Adapted white point
+        Rw_c = D * (Yw / rgb_w[0]) + (1.0 - D)
+        Gw_c = D * (Yw / rgb_w[1]) + (1.0 - D)  
+        Bw_c = D * (Yw / rgb_w[2]) + (1.0 - D)
+        
+        # Adapted cone responses for sample
+        R_c = D * (Yw / rgb_w[0]) * rgb_cat16[:, 0] / rgb_w[0] + (1.0 - D) * rgb_cat16[:, 0] / rgb_w[0]
+        G_c = D * (Yw / rgb_w[1]) * rgb_cat16[:, 1] / rgb_w[1] + (1.0 - D) * rgb_cat16[:, 1] / rgb_w[1]
+        B_c = D * (Yw / rgb_w[2]) * rgb_cat16[:, 2] / rgb_w[2] + (1.0 - D) * rgb_cat16[:, 2] / rgb_w[2]
+        
+        # Step 3: Convert to Hunt-Pointer-Estevez space
+        MHPE = np.array([
+            [ 0.38971, 0.68898, -0.07868],
+            [-0.22981, 1.18340,  0.04641],
+            [ 0.00000, 0.00000,  1.00000]
+        ])
+        
+        # Transform adapted cone responses
+        adapted_rgb = np.column_stack([R_c, G_c, B_c])
+        rgb_prime = adapted_rgb @ MHPE.T
+        
+        # Step 4: Apply nonlinearity
+        def f_nonlinear(x):
+            return np.where(x >= 0, 
+                           np.sign(x) * (400.0 * (FL * np.abs(x) / 100.0) ** 0.42) / (27.13 + (FL * np.abs(x) / 100.0) ** 0.42) + 0.1,
+                           np.sign(x) * (400.0 * (FL * np.abs(x) / 100.0) ** 0.42) / (27.13 + (FL * np.abs(x) / 100.0) ** 0.42) + 0.1)
+        
+        R_a = f_nonlinear(rgb_prime[:, 0])
+        G_a = f_nonlinear(rgb_prime[:, 1]) 
+        B_a = f_nonlinear(rgb_prime[:, 2])
+        
+        # Step 5: Calculate achromatic response
+        A = (2.0 * R_a + G_a + (1.0/20.0) * B_a - 0.305) * Nbb
+        
+        # Step 6: Calculate lightness
+        J = 100.0 * (A / (1.64 - 0.29 ** n)) ** (c * z)
+        
+        # Step 7: Calculate chroma
+        # Red-green and yellow-blue opponent responses
+        a = R_a - 12.0 * G_a / 11.0 + B_a / 11.0
+        b = (1.0/9.0) * (R_a + G_a - 2.0 * B_a)
+        
+        # Hue angle
+        h = np.arctan2(b, a) * 180.0 / np.pi
+        h = np.where(h < 0, h + 360.0, h)
+        
+        # Chroma
+        C = 50.0 * np.sqrt(a**2 + b**2) * (1.64 - 0.29 ** n) ** 0.73 / (n ** 0.2 * (1.64 - 0.29 ** n) ** 0.73)
+        
+        return np.column_stack([J, C, h])
     
-
+    def _xyz_to_cam16(self, xyz: np.ndarray) -> np.ndarray:
+        """Convert XYZ to CAM16 color appearance coordinates."""
+        # Use the batch version for single color
+        return self._xyz_to_cam16_batch(xyz.reshape(1, 3))[0]
     
-
-
+    def _cam16_to_ucs_batch(self, cam16_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of CAM16 coordinates to CAM16-UCS coordinates.
+        
+        Args:
+            cam16_batch: Array of CAM16 coordinates shape (N, 3) as [J, C, h]
+            
+        Returns:
+            Array of CAM16-UCS coordinates shape (N, 3) as [Jab_L, Jab_a, Jab_b]
+        """
+        J = cam16_batch[:, 0]
+        C = cam16_batch[:, 1] 
+        h = cam16_batch[:, 2]
+        
+        # Convert to radians
+        h_rad = h * np.pi / 180.0
+        
+        # CAM16-UCS transformation
+        # Lightness
+        Jab_L = 1.7 * J / (1.0 + 0.007 * J)
+        
+        # Chroma components
+        Jab_C = (1.0 + 0.0228 * C) * C / (1.0 + 0.0228 * C)
+        
+        # Cartesian coordinates
+        Jab_a = Jab_C * np.cos(h_rad)
+        Jab_b = Jab_C * np.sin(h_rad)
+        
+        return np.column_stack([Jab_L, Jab_a, Jab_b])
     
-
+    def _cam16_to_ucs(self, cam16: np.ndarray) -> np.ndarray:
+        """Convert CAM16 coordinates to CAM16-UCS coordinates."""
+        # Use the batch version for single color
+        return self._cam16_to_ucs_batch(cam16.reshape(1, 3))[0]
     
-
+    def _cam16_ucs_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
+        """CAM16-UCS color difference calculation."""
+        # Convert RGB to XYZ
+        xyz1 = self._rgb_to_xyz(color1)
+        xyz2 = self._rgb_to_xyz(color2)
+        
+        # Convert XYZ to CAM16
+        cam16_1 = self._xyz_to_cam16(xyz1)
+        cam16_2 = self._xyz_to_cam16(xyz2)
+        
+        # Convert CAM16 to UCS
+        ucs1 = self._cam16_to_ucs(cam16_1)
+        ucs2 = self._cam16_to_ucs(cam16_2)
+        
+        # Calculate Euclidean distance in UCS space
+        diff = ucs1 - ucs2
+        return np.sqrt(np.sum(diff ** 2))
     
+    def _cam16_ucs_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+        """Batch CAM16-UCS distance calculation."""
+        # Check cache for palette UCS conversion
+        if 'cam16_ucs_palette' not in self._palette_cache:
+            # Convert palette to UCS
+            xyz_palette = self._rgb_to_xyz_batch(palette)
+            cam16_palette = self._xyz_to_cam16_batch(xyz_palette)
+            self._palette_cache['cam16_ucs_palette'] = self._cam16_to_ucs_batch(cam16_palette)
+        
+        # Convert colors to UCS
+        xyz_colors = self._rgb_to_xyz_batch(colors)
+        cam16_colors = self._xyz_to_cam16_batch(xyz_colors)
+        ucs_colors = self._cam16_to_ucs_batch(cam16_colors)
+        ucs_palette = self._palette_cache['cam16_ucs_palette']
+        
+        # Calculate distances using broadcasting
+        colors_expanded = ucs_colors[:, np.newaxis, :]
+        palette_expanded = ucs_palette[np.newaxis, :, :]
+        
+        diff = colors_expanded - palette_expanded
+        distances = np.sqrt(np.sum(diff ** 2, axis=2))
+        return distances
     def _rgb_to_oklab_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
         """Convert batch of RGB colors to Oklab color space efficiently.
         
