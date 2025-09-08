@@ -5,7 +5,6 @@ from typing import Tuple, Union
 import colorspacious
 import scipy.ndimage
 from tqdm import tqdm
-import colour
 
 
 class ColorDistanceCalculator:
@@ -820,6 +819,168 @@ class ColorDistanceCalculator:
         
         return distances
 
+    def _rgb_to_xyz_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of RGB colors to XYZ color space using sRGB transformation.
+        
+        Args:
+            rgb_batch: Array of RGB colors shape (N, 3) in 0-255 range
+            
+        Returns:
+            Array of XYZ colors shape (N, 3)
+        """
+        # Normalize RGB to 0-1 range
+        rgb_normalized = rgb_batch.astype(np.float64) / 255.0
+        
+        # Apply gamma correction (sRGB to linear RGB)
+        def gamma_correct(c):
+            return np.where(c <= 0.04045, c / 12.92, np.power((c + 0.055) / 1.055, 2.4))
+        
+        linear_rgb = gamma_correct(rgb_normalized)
+        
+        # sRGB to XYZ transformation matrix (D65 illuminant)
+        # Based on IEC 61966-2-1:1999 standard
+        M = np.array([
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041]
+        ])
+        
+        # Apply transformation: XYZ = M * RGB
+        xyz = linear_rgb @ M.T
+        
+        return xyz
+    
+    def _xyz_to_cam16_batch(self, xyz_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of XYZ colors to CAM16 color appearance model.
+        
+        Args:
+            xyz_batch: Array of XYZ colors shape (N, 3)
+            
+        Returns:
+            Array of CAM16 colors shape (N, 3) as [J, M, h]
+        """
+        # Standard viewing conditions for CAM16 (CIE standard illuminant D65)
+        XYZ_w = np.array([95.047, 100.0, 108.883])  # D65 white point
+        L_A = 64.0 / np.pi / 5.0  # Adapting field luminance (cd/m²)
+        Y_b = 20.0  # Background luminance factor (%)
+        c = 0.69  # Impact of surround (average)
+        N_c = 1.0  # Chromatic induction factor (average)
+        F = 1.0  # Degree of adaptation (complete adaptation)
+        
+        # Step 1: Conversion to cone responses using CAT02
+        M_CAT02 = np.array([
+            [0.7328, 0.4296, -0.1624],
+            [-0.7036, 1.6975, 0.0061],
+            [0.0030, 0.0136, 0.9834]
+        ])
+        
+        # Apply CAT02 transformation
+        rgb_batch = xyz_batch @ M_CAT02.T
+        rgb_w = XYZ_w @ M_CAT02.T
+        
+        # Step 2: Calculate degree of adaptation
+        D = F * (1.0 - (1.0/3.6) * np.exp((-L_A - 42.0) / 92.0))
+        D = np.clip(D, 0.0, 1.0)
+        
+        # Step 3: Calculate adapted cone responses
+        # Avoid division by zero
+        rgb_w = np.where(np.abs(rgb_w) < 1e-10, 1e-10, rgb_w)
+        rgb_c = D * (100.0 * rgb_batch / rgb_w) + (1.0 - D) * rgb_batch
+        
+        # Step 4: Convert to Hunt-Pointer-Estevez space
+        M_HPE = np.array([
+            [0.38971, 0.68898, -0.07868],
+            [-0.22981, 1.18340, 0.04641],
+            [0.00000, 0.00000, 1.00000]
+        ])
+        
+        rgb_prime = rgb_c @ M_HPE.T
+        
+        # Step 5: Apply nonlinear response compression
+        FL = 0.2 * np.power(5.0 * L_A, 1.0/3.0) + 0.1 * np.power(1.0 - np.power(5.0 * L_A, 1.0/3.0), 2.0) * np.power(5.0 * L_A, 1.0/3.0)
+        
+        def response_compression(x):
+            sign_x = np.sign(x)
+            abs_x = np.abs(x)
+            # Avoid numerical issues
+            term = FL * abs_x / 100.0
+            term = np.clip(term, 1e-10, 1e10)
+            result = sign_x * 400.0 * np.power(term, 0.42) / (27.13 + np.power(term, 0.42)) + 0.1
+            return np.where(np.isfinite(result), result, 0.1)  # Fallback for invalid values
+        
+        rgb_a = response_compression(rgb_prime)
+        
+        # Step 6: Calculate CAM16 correlates
+        # Achromatic response
+        A = (2.0 * rgb_a[:, 0] + rgb_a[:, 1] + (1.0/20.0) * rgb_a[:, 2] - 0.305) * N_c
+        
+        # Calculate lightness J
+        rgb_w_prime = rgb_w @ M_HPE.T
+        rgb_aw = response_compression(rgb_w_prime)
+        A_w = (2.0 * rgb_aw[0] + rgb_aw[1] + (1.0/20.0) * rgb_aw[2] - 0.305) * N_c
+        
+        # Ensure A_w is positive and avoid division by zero
+        A_w = np.maximum(A_w, 1e-10)
+        z = 1.48 + np.sqrt(Y_b / 100.0)
+        
+        # Ensure A/A_w is positive for power function
+        ratio = np.maximum(A / A_w, 1e-10)
+        J = 100.0 * np.power(ratio, c * z)
+        
+        # Calculate redness-greenness and yellowness-blueness
+        a = rgb_a[:, 0] - 12.0 * rgb_a[:, 1] / 11.0 + rgb_a[:, 2] / 11.0
+        b = (1.0/9.0) * (rgb_a[:, 0] + rgb_a[:, 1] - 2.0 * rgb_a[:, 2])
+        
+        # Calculate hue angle
+        h_rad = np.arctan2(b, a)
+        h = np.degrees(h_rad) % 360.0
+        
+        # Calculate eccentricity and hue composition
+        e_t = 0.25 * (np.cos(h_rad + 2.0) + 3.8)
+        
+        # Calculate chroma with numerical safeguards
+        denom = rgb_a[:, 0] + rgb_a[:, 1] + (21.0/20.0) * rgb_a[:, 2]
+        denom = np.maximum(np.abs(denom), 1e-10)  # Avoid division by zero
+        
+        t = (50000.0/13.0 * N_c * e_t * np.sqrt(a**2 + b**2)) / denom
+        t = np.maximum(t, 1e-10)  # Ensure t is positive
+        
+        C = np.power(t, 0.9) * np.sqrt(np.maximum(J / 100.0, 1e-10)) * np.power(1.64 - np.power(0.29, Y_b / 100.0), 0.73)
+        
+        # Calculate colorfulness M  
+        M = C * np.power(FL, 0.25)
+        
+        # Ensure all values are finite
+        J = np.where(np.isfinite(J), J, 0.0)
+        M = np.where(np.isfinite(M), M, 0.0)
+        h = np.where(np.isfinite(h), h, 0.0)
+        
+        return np.column_stack([J, M, h])
+    
+    def _cam16_to_ucs_batch(self, cam16_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of CAM16 colors to CAM16-UCS uniform color space.
+        
+        Args:
+            cam16_batch: Array of CAM16 colors shape (N, 3) as [J, M, h]
+            
+        Returns:
+            Array of CAM16-UCS colors shape (N, 3) as [J', a', b']
+        """
+        J, M, h = cam16_batch[:, 0], cam16_batch[:, 1], cam16_batch[:, 2]
+        
+        # CAM16-UCS transformation
+        # J' = (1 + 100*c1) * J / (1 + c1 * J)
+        # Where c1 = 0.007 for CAM16-UCS
+        c1 = 0.007
+        J_prime = (1.0 + 100.0 * c1) * J / (1.0 + c1 * J)
+        
+        # Convert to Cartesian coordinates in CAM16-UCS
+        h_rad = np.radians(h)
+        a_prime = M * np.cos(h_rad)
+        b_prime = M * np.sin(h_rad)
+        
+        return np.column_stack([J_prime, a_prime, b_prime])
+    
     def _rgb_to_cam16_ucs_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
         """Convert batch of RGB colors to CAM16-UCS color space efficiently.
         
@@ -829,23 +990,16 @@ class ColorDistanceCalculator:
         Returns:
             Array of CAM16-UCS colors shape (N, 3)
         """
-        # Normalize RGB to 0-1 range for colour-science
-        rgb_normalized = rgb_batch / 255.0
+        # Step 1: RGB → XYZ
+        xyz_batch = self._rgb_to_xyz_batch(rgb_batch)
         
-        try:
-            # Convert each RGB color to CAM16-UCS
-            cam16_ucs_batch = np.zeros_like(rgb_normalized)
-            for i, rgb_color in enumerate(rgb_normalized):
-                # Convert RGB to XYZ using sRGB colourspace
-                xyz = colour.RGB_to_XYZ(rgb_color, 'sRGB')
-                # Convert XYZ to CAM16-UCS
-                cam16_ucs_batch[i] = colour.XYZ_to_CAM16UCS(xyz)
-            
-            return cam16_ucs_batch
-            
-        except Exception as e:
-            # Fallback to individual conversions if batch fails
-            return np.array([self._rgb_to_cam16_ucs(color) for color in rgb_batch])
+        # Step 2: XYZ → CAM16
+        cam16_batch = self._xyz_to_cam16_batch(xyz_batch)
+        
+        # Step 3: CAM16 → CAM16-UCS
+        cam16_ucs_batch = self._cam16_to_ucs_batch(cam16_batch)
+        
+        return cam16_ucs_batch
     
     def _rgb_to_cam16_ucs(self, rgb: np.ndarray) -> np.ndarray:
         """Convert RGB to CAM16-UCS color space.
@@ -856,16 +1010,8 @@ class ColorDistanceCalculator:
         Returns:
             CAM16-UCS color as [J', a', b'] array
         """
-        # Normalize to 0-1 range for colour-science
-        rgb_normalized = rgb / 255.0
-        
-        # Convert RGB to XYZ using sRGB colourspace
-        xyz = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
-        
-        # Convert XYZ to CAM16-UCS
-        cam16_ucs = colour.XYZ_to_CAM16UCS(xyz)
-        
-        return cam16_ucs
+        # Use the batch version for single color
+        return self._rgb_to_cam16_ucs_batch(rgb.reshape(1, 3))[0]
     
     def _cam16_ucs_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
         """CAM16-UCS perceptual color distance.

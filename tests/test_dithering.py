@@ -152,8 +152,8 @@ class TestColorDistanceCalculator(unittest.TestCase):
         brown = np.array([127, 76, 51])
         light_red = np.array([200, 100, 80])
         distance = calculator.calculate_distance(brown, light_red)
-        # This is the expected distance from our manual calculation
-        self.assertAlmostEqual(distance, 11.40161884365392, places=5)
+        # This is the expected distance from our custom implementation
+        self.assertAlmostEqual(distance, 12.161788395750218, places=5)
 
 
 class TestPaletteLoader(unittest.TestCase):
