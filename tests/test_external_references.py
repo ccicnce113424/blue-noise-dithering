@@ -272,7 +272,8 @@ class TestExternalReferences(unittest.TestCase):
         test_pairs = [
             (self.test_colors[0], self.test_colors[1]),  # Red vs Green
             (self.test_colors[3], self.test_colors[4]),  # White vs Black
-        ]  # Use fewer pairs that are more reliable
+            (self.test_colors[5], self.test_colors[0]),  # Gray vs Red (test neutral colors)
+        ]  # Include gray to test previously problematic cases
         
         for color1, color2 in test_pairs:
             with self.subTest(color1=tuple(color1), color2=tuple(color2)):
@@ -292,9 +293,7 @@ class TestExternalReferences(unittest.TestCase):
                 # Calculate Euclidean distance in Oklab space (standard practice)
                 ref_distance = np.sqrt(np.sum((oklab1 - oklab2) ** 2))
                 
-                # Oklab implementations can vary due to different transformation matrices
-                # Use more lenient tolerance but ensure both are in reasonable ranges
-                oklab_tolerance = 0.50  # 50% tolerance for Oklab due to implementation differences
+                # Use strict tolerance since our implementation should now be accurate
                 relative_error = abs(our_distance - ref_distance) / max(ref_distance, 1e-6)
                 
                 # Both should be positive for different colors
@@ -302,18 +301,13 @@ class TestExternalReferences(unittest.TestCase):
                     self.assertGreater(our_distance, 0, "Our Oklab should be positive for different colors")
                     self.assertGreater(ref_distance, 0, "Reference Oklab should be positive for different colors")
                     
-                    # Both should be in reasonable ranges and preserve ordering
-                    self.assertLess(our_distance, 2.0, "Our distance should be reasonable")
-                    self.assertLess(ref_distance, 2.0, "Reference distance should be reasonable") 
-                    
-                    # Log the comparison for information
-                    print(f"Oklab comparison: our={our_distance:.6f}, ref={ref_distance:.6f}, "
-                          f"relative_error={relative_error:.3f}")
-                    
-                    # Check if they're at least in the same ballpark (not strict match due to algorithm differences)
-                    self.assertLess(relative_error, oklab_tolerance,
-                                   f"Oklab implementations should be reasonably similar: our={our_distance:.6f}, "
-                                   f"ref={ref_distance:.6f}, relative_error={relative_error:.3f}")
+                    # Check strict accuracy now that implementation is corrected
+                    self.assertLess(relative_error, self.tolerance,
+                                   f"Oklab should match reference accurately: our={our_distance:.6f}, "
+                                   f"ref={ref_distance:.6f}, relative_error={relative_error:.6f}")
+                
+                print(f"Oklab validation: our={our_distance:.6f}, ref={ref_distance:.6f}, "
+                      f"relative_error={relative_error:.6f}")
 
     @unittest.skipUnless(COLOUR_SCIENCE_AVAILABLE, "colour-science not available")
     def test_batch_consistency_vs_reference(self):
