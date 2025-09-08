@@ -55,7 +55,7 @@ def create_sample_config(config_path: str) -> None:
         config_path: Path to save sample configuration
     """
     sample_config = {
-        'color_distance_method': 'ciede2000_fast',
+        'color_distance_method': 'ciede2000',
         'noise_strength': 0.5,
         'adaptive_strategy': 'gradient_edge',
         'alpha_method': 'dithering',
@@ -96,7 +96,7 @@ Examples:
   blue-noise-dither input.png output.png --palette colors.txt --blue-noise noise.png --adaptive-strategy uniform
   
 Color distance methods:
-  rgb, weighted_rgb, cie76, cie94, ciede2000, ciede2000_fast, oklab, hsv
+  rgb, weighted_rgb, cie76, cie94, ciede2000, oklab, hsv
   
 Alpha methods:
   threshold, dithering
