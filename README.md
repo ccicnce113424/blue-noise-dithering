@@ -4,7 +4,7 @@ A comprehensive blue noise dithering tool that converts images to specified pale
 
 ## Features
 
-- **Multiple Color Distance Methods**: RGB, Weighted RGB, CIE 76, CIE 94, CIEDE2000 (full standard), CIEDE2000 Fast (optimized), Oklab, HSV, Compuphase
+- **Multiple Color Distance Methods**: RGB, Weighted RGB, CIE 76, CIE 94, CIEDE2000 (full standard), CIEDE2000 Fast (optimized), Oklab, HSV, Compuphase, CAM16-UCS
 - **Performance Optimized**: Vectorized implementations with significant speed improvements
 - **Paint.net TXT Palette Support**: Load palettes in Paint.net TXT format  
 - **Blue Noise Texture**: Use custom blue noise textures with tiling support
@@ -54,6 +54,7 @@ python -m blue_noise_dithering.cli input.png output.png \
 - `oklab`: Oklab perceptual color space (fast, modern accuracy)
 - `hsv`: HSV color space distance (fast, for artistic effects)
 - `compuphase`: Low-cost perceptual approximation (very fast, good accuracy for most use cases)
+- `cam16_ucs`: CAM16-UCS perceptual uniform color space (excellent perceptual accuracy, moderate speed)
 
 ## Adaptive Noise Strategies
 

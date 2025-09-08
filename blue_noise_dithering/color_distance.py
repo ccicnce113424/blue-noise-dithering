@@ -5,13 +5,14 @@ from typing import Tuple, Union
 import colorspacious
 import scipy.ndimage
 from tqdm import tqdm
+import colour
 
 
 class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase', 'cam16_ucs'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -56,6 +57,8 @@ class ColorDistanceCalculator:
             return self._hsv_distance(color1, color2)
         elif self.method == 'compuphase':
             return self._compuphase_distance(color1, color2)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance(color1, color2)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -94,6 +97,8 @@ class ColorDistanceCalculator:
             return self._hsv_distance_batch(colors, palette)
         elif self.method == 'compuphase':
             return self._compuphase_distance_batch(colors, palette)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance_batch(colors, palette)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -813,4 +818,96 @@ class ColorDistanceCalculator:
         distance_squared = red_term + green_term + blue_term
         distances = np.sqrt(distance_squared.astype(np.float64))
         
+        return distances
+
+    def _rgb_to_cam16_ucs_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of RGB colors to CAM16-UCS color space efficiently.
+        
+        Args:
+            rgb_batch: Array of RGB colors shape (N, 3) in 0-255 range
+            
+        Returns:
+            Array of CAM16-UCS colors shape (N, 3)
+        """
+        # Normalize RGB to 0-1 range for colour-science
+        rgb_normalized = rgb_batch / 255.0
+        
+        try:
+            # Convert each RGB color to CAM16-UCS
+            cam16_ucs_batch = np.zeros_like(rgb_normalized)
+            for i, rgb_color in enumerate(rgb_normalized):
+                # Convert RGB to XYZ using sRGB colourspace
+                xyz = colour.RGB_to_XYZ(rgb_color, 'sRGB')
+                # Convert XYZ to CAM16-UCS
+                cam16_ucs_batch[i] = colour.XYZ_to_CAM16UCS(xyz)
+            
+            return cam16_ucs_batch
+            
+        except Exception as e:
+            # Fallback to individual conversions if batch fails
+            return np.array([self._rgb_to_cam16_ucs(color) for color in rgb_batch])
+    
+    def _rgb_to_cam16_ucs(self, rgb: np.ndarray) -> np.ndarray:
+        """Convert RGB to CAM16-UCS color space.
+        
+        Args:
+            rgb: RGB color as [R, G, B] in 0-255 range
+            
+        Returns:
+            CAM16-UCS color as [J', a', b'] array
+        """
+        # Normalize to 0-1 range for colour-science
+        rgb_normalized = rgb / 255.0
+        
+        # Convert RGB to XYZ using sRGB colourspace
+        xyz = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
+        
+        # Convert XYZ to CAM16-UCS
+        cam16_ucs = colour.XYZ_to_CAM16UCS(xyz)
+        
+        return cam16_ucs
+    
+    def _cam16_ucs_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
+        """CAM16-UCS perceptual color distance.
+        
+        CAM16-UCS is a uniform color space based on the CAM16 color appearance model
+        that provides better perceptual uniformity than CIELAB across the entire color space.
+        
+        Args:
+            color1: RGB color as [R, G, B] in 0-255 range
+            color2: RGB color as [R, G, B] in 0-255 range
+            
+        Returns:
+            Euclidean distance in CAM16-UCS space
+        """
+        cam16_ucs1 = self._rgb_to_cam16_ucs(color1)
+        cam16_ucs2 = self._rgb_to_cam16_ucs(color2)
+        
+        diff = cam16_ucs1 - cam16_ucs2
+        return np.sqrt(np.sum(diff ** 2))
+    
+    def _cam16_ucs_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+        """Batch CAM16-UCS distance calculation.
+        
+        Args:
+            colors: Array of colors shape (N, 3) in 0-255 range
+            palette: Array of palette colors shape (M, 3) in 0-255 range
+            
+        Returns:
+            Distance matrix shape (N, M)
+        """
+        # Check cache for palette CAM16-UCS conversion
+        if 'cam16_ucs_palette' not in self._palette_cache:
+            self._palette_cache['cam16_ucs_palette'] = self._rgb_to_cam16_ucs_batch(palette)
+        
+        # Convert colors to CAM16-UCS
+        colors_cam16_ucs = self._rgb_to_cam16_ucs_batch(colors)
+        palette_cam16_ucs = self._palette_cache['cam16_ucs_palette']
+        
+        # Calculate distances using broadcasting
+        colors_expanded = colors_cam16_ucs[:, np.newaxis, :]  # (N, 1, 3)
+        palette_expanded = palette_cam16_ucs[np.newaxis, :, :]  # (1, M, 3)
+        
+        diff = colors_expanded - palette_expanded
+        distances = np.sqrt(np.sum(diff ** 2, axis=2))
         return distances
