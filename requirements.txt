@@ -1,10 +1,12 @@
 Pillow>=10.0.0
 numpy>=1.24.0
-colorspacious>=1.1.2
 tqdm>=4.64.0
 PyYAML>=6.0
 scipy>=1.10.0
 scikit-image>=0.21.0
+# Primary color science library for accurate CIE color space conversions
+colour-science>=0.4.6
+# Backup color space conversion library
+colorspacious>=1.1.2
 # External reference libraries for color distance validation
 colormath>=3.0.0
-colour-science>=0.4.6

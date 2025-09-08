@@ -2,9 +2,17 @@
 
 import numpy as np
 from typing import Tuple, Union
-import colorspacious
 import scipy.ndimage
 from tqdm import tqdm
+
+# Use colour-science for accurate, standards-compliant color space conversions
+try:
+    import colour
+    COLOUR_SCIENCE_AVAILABLE = True
+except ImportError:
+    # Fallback to colorspacious if colour-science not available
+    import colorspacious
+    COLOUR_SCIENCE_AVAILABLE = False
 
 
 class ColorDistanceCalculator:
@@ -145,21 +153,39 @@ class ColorDistanceCalculator:
         # Normalize RGB to 0-1 range
         rgb_normalized = rgb_batch / 255.0
         
-        # Convert using colorspacious in batch mode
-        try:
-            lab_batch = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
-            return lab_batch
-        except:
-            # Fallback to individual conversions if batch fails
-            return np.array([self._rgb_to_lab(color) for color in rgb_batch])
+        if COLOUR_SCIENCE_AVAILABLE:
+            # Use colour-science for accurate conversion
+            try:
+                # Convert RGB to XYZ then to LAB using colour-science
+                xyz_batch = np.array([colour.RGB_to_XYZ(rgb, 'sRGB') for rgb in rgb_normalized])
+                lab_batch = np.array([colour.XYZ_to_Lab(xyz) for xyz in xyz_batch])
+                return lab_batch
+            except:
+                # Fallback to single conversions if batch fails
+                return np.array([self._rgb_to_lab(color * 255.0) for color in rgb_normalized])
+        else:
+            # Fallback to colorspacious if colour-science not available
+            try:
+                lab_batch = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
+                return lab_batch
+            except:
+                # Fallback to individual conversions if batch fails
+                return np.array([self._rgb_to_lab(color * 255.0) for color in rgb_normalized])
     
     def _rgb_to_lab(self, rgb: np.ndarray) -> np.ndarray:
         """Convert RGB to LAB color space."""
         # Normalize RGB to 0-1 range
         rgb_normalized = rgb / 255.0
-        # Convert using colorspacious
-        lab = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
-        return lab
+        
+        if COLOUR_SCIENCE_AVAILABLE:
+            # Use colour-science for accurate, standards-compliant conversion
+            xyz = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
+            lab = colour.XYZ_to_Lab(xyz)
+            return lab
+        else:
+            # Fallback to colorspacious if colour-science not available
+            lab = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
+            return lab
     
     def _cie76_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
         """CIE76 Delta E distance."""
