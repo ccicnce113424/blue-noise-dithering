@@ -8,5 +8,3 @@ scikit-image>=0.21.0
 colour-science>=0.4.6
 # Backup color space conversion library
 colorspacious>=1.1.2
-# External reference libraries for color distance validation
-colormath>=3.0.0
