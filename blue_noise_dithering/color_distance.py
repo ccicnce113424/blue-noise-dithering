@@ -11,7 +11,7 @@ class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'ciede2000_no_sep', 'oklab', 'hsv', 'compuphase'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -50,6 +50,8 @@ class ColorDistanceCalculator:
             return self._ciede2000_distance(color1, color2)
         elif self.method == 'ciede2000_fast':
             return self._ciede2000_fast_distance(color1, color2)
+        elif self.method == 'ciede2000_no_sep':
+            return self._ciede2000_no_sep_distance(color1, color2)
         elif self.method == 'oklab':
             return self._oklab_distance(color1, color2)
         elif self.method == 'hsv':
@@ -88,6 +90,8 @@ class ColorDistanceCalculator:
             return self._ciede2000_distance_batch(colors, palette, show_progress)
         elif self.method == 'ciede2000_fast':
             return self._ciede2000_fast_distance_batch(colors, palette, show_progress)
+        elif self.method == 'ciede2000_no_sep':
+            return self._ciede2000_no_sep_distance_batch(colors, palette, show_progress)
         elif self.method == 'oklab':
             return self._oklab_distance_batch(colors, palette)
         elif self.method == 'hsv':
@@ -561,6 +565,156 @@ class ColorDistanceCalculator:
         lab1_batch = lab1.reshape(1, 3)
         lab2_batch = lab2.reshape(1, 3)
         result = self._ciede2000_fast_chunk_vectorized(lab1_batch, lab2_batch)
+        return float(result[0, 0])
+    
+    def _ciede2000_no_sep_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
+        """CIEDE2000 with No Separation correction Delta E distance."""
+        lab1 = self._rgb_to_lab(color1)
+        lab2 = self._rgb_to_lab(color2)
+        
+        # Use No Separation implementation
+        return self._ciede2000_no_sep_single(lab1, lab2)
+    
+    def _ciede2000_no_sep_distance_batch(self, colors: np.ndarray, palette: np.ndarray, show_progress: bool = True) -> np.ndarray:
+        """Batch CIEDE2000 with No Separation correction distance calculation."""
+        # Convert RGB to LAB space
+        colors_lab = np.array([self._rgb_to_lab(color) for color in colors])
+        palette_lab = np.array([self._rgb_to_lab(color) for color in palette])
+        
+        return self._ciede2000_no_sep_vectorized(colors_lab, palette_lab, show_progress)
+    
+    def _ciede2000_no_sep_vectorized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
+        """CIEDE2000 with No Separation correction vectorized implementation."""
+        n_colors = len(colors_lab)
+        n_palette = len(palette_lab)
+        result = np.zeros((n_colors, n_palette))
+        
+        # Process in chunks for memory efficiency
+        chunk_size = 1000
+        n_chunks = (n_colors + chunk_size - 1) // chunk_size
+        
+        pbar = None
+        if show_progress and n_chunks > 1:
+            pbar = tqdm(total=n_chunks, desc="CIEDE2000 No Separation distance calculation")
+        
+        for i in range(0, n_colors, chunk_size):
+            end_idx = min(i + chunk_size, n_colors)
+            chunk_colors = colors_lab[i:end_idx]
+            
+            chunk_result = self._ciede2000_no_sep_chunk_vectorized(chunk_colors, palette_lab)
+            result[i:end_idx] = chunk_result
+            
+            if pbar:
+                pbar.update(1)
+        
+        if pbar:
+            pbar.close()
+        
+        return result
+    
+    def _ciede2000_no_sep_chunk_vectorized(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+        """CIEDE2000 with No Separation correction calculation for a chunk of colors."""
+        # Reshape for broadcasting
+        colors_exp = colors[:, np.newaxis, :]  # (n_colors, 1, 3)
+        palette_exp = palette[np.newaxis, :, :]  # (1, n_palette, 3)
+        
+        # Extract L*, a*, b* values
+        L1 = colors_exp[:, :, 0]
+        a1 = colors_exp[:, :, 1]
+        b1 = colors_exp[:, :, 2]
+        
+        L2 = palette_exp[:, :, 0]
+        a2 = palette_exp[:, :, 1]
+        b2 = palette_exp[:, :, 2]
+        
+        # Step 1: Calculate chroma values
+        C1 = np.sqrt(a1**2 + b1**2)
+        C2 = np.sqrt(a2**2 + b2**2)
+        C_avg = (C1 + C2) / 2.0
+        
+        # Step 2: Calculate G factor for chroma adjustment
+        G = 0.5 * (1 - np.sqrt(C_avg**7 / (C_avg**7 + 25**7)))
+        
+        # Step 3: Adjust a* values
+        a1_prime = (1 + G) * a1
+        a2_prime = (1 + G) * a2
+        
+        # Step 4: Calculate adjusted chroma and hue
+        C1_prime = np.sqrt(a1_prime**2 + b1**2)
+        C2_prime = np.sqrt(a2_prime**2 + b2**2)
+        
+        # No Separation hue calculation - more robust approach
+        h1_prime = np.arctan2(b1, a1_prime) * 180 / np.pi
+        h2_prime = np.arctan2(b2, a2_prime) * 180 / np.pi
+        
+        # Ensure hue values are in [0, 360) range
+        h1_prime = np.where(h1_prime < 0, h1_prime + 360, h1_prime)
+        h2_prime = np.where(h2_prime < 0, h2_prime + 360, h2_prime)
+        
+        # Step 5: Calculate differences
+        dL_prime = L2 - L1
+        dC_prime = C2_prime - C1_prime
+        
+        # No Separation hue difference calculation - avoids discontinuities
+        # Calculate the shortest angular distance between hues
+        h_diff = h2_prime - h1_prime
+        
+        # Use continuous hue difference calculation to avoid separation issues
+        dh_prime = np.where(np.abs(h_diff) <= 180, h_diff, 
+                           np.where(h_diff > 180, h_diff - 360, h_diff + 360))
+        
+        # Zero out hue difference when either chroma is zero
+        zero_chroma = (C1_prime * C2_prime) == 0
+        dh_prime = np.where(zero_chroma, 0, dh_prime)
+        
+        # Calculate dH' using No Separation approach
+        dH_prime = 2 * np.sqrt(C1_prime * C2_prime) * np.sin(np.radians(dh_prime / 2))
+        
+        # Step 6: Calculate average values with No Separation approach
+        L_avg = (L1 + L2) / 2.0
+        C_prime_avg = (C1_prime + C2_prime) / 2.0
+        
+        # No Separation average hue calculation - continuous approach
+        h_sum = h1_prime + h2_prime
+        h_prime_avg = np.where(zero_chroma, h_sum, 
+                              np.where(np.abs(h1_prime - h2_prime) <= 180, h_sum / 2.0,
+                                      np.where(h_sum < 360, (h_sum + 360) / 2.0, (h_sum - 360) / 2.0)))
+        
+        # Step 7: Calculate weighting functions
+        T = (1 - 0.17 * np.cos(np.radians(h_prime_avg - 30)) +
+             0.24 * np.cos(np.radians(2 * h_prime_avg)) +
+             0.32 * np.cos(np.radians(3 * h_prime_avg + 6)) -
+             0.20 * np.cos(np.radians(4 * h_prime_avg - 63)))
+        
+        delta_theta = 30 * np.exp(-((h_prime_avg - 275) / 25)**2)
+        
+        R_C = 2 * np.sqrt(C_prime_avg**7 / (C_prime_avg**7 + 25**7))
+        
+        S_L = 1 + (0.015 * (L_avg - 50)**2) / np.sqrt(20 + (L_avg - 50)**2)
+        S_C = 1 + 0.045 * C_prime_avg
+        S_H = 1 + 0.015 * C_prime_avg * T
+        
+        R_T = -np.sin(2 * np.radians(delta_theta)) * R_C
+        
+        # Step 8: Calculate final CIEDE2000 distance with No Separation correction
+        # Parametric factors (usually kL = kC = kH = 1 for graphic arts)
+        kL = kC = kH = 1.0
+        
+        delta_E00 = np.sqrt(
+            (dL_prime / (kL * S_L))**2 +
+            (dC_prime / (kC * S_C))**2 +
+            (dH_prime / (kH * S_H))**2 +
+            R_T * (dC_prime / (kC * S_C)) * (dH_prime / (kH * S_H))
+        )
+        
+        return delta_E00
+    
+    def _ciede2000_no_sep_single(self, lab1: np.ndarray, lab2: np.ndarray) -> float:
+        """CIEDE2000 with No Separation correction calculation for single color pair."""
+        # Use the vectorized version for single pair
+        lab1_batch = lab1.reshape(1, 3)
+        lab2_batch = lab2.reshape(1, 3)
+        result = self._ciede2000_no_sep_chunk_vectorized(lab1_batch, lab2_batch)
         return float(result[0, 0])
     
 

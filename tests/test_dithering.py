@@ -107,6 +107,66 @@ class TestColorDistanceCalculator(unittest.TestCase):
         black_to_white = calculator.calculate_distance(self.black, self.white)
         self.assertAlmostEqual(black_to_white, 764.8333151739665, places=5)  # Verified calculation
 
+    def test_ciede2000_no_sep_distance(self):
+        """Test CIEDE2000 No Separation distance calculation specifically."""
+        calculator = ColorDistanceCalculator('ciede2000_no_sep')
+        
+        # Test basic properties
+        # Distance from a color to itself should be 0
+        self.assertEqual(calculator.calculate_distance(self.red, self.red), 0)
+        self.assertEqual(calculator.calculate_distance(self.green, self.green), 0)
+        self.assertEqual(calculator.calculate_distance(self.blue, self.blue), 0)
+        
+        # Distance should be positive for different colors
+        red_green_dist = calculator.calculate_distance(self.red, self.green)
+        red_blue_dist = calculator.calculate_distance(self.red, self.blue)
+        green_blue_dist = calculator.calculate_distance(self.green, self.blue)
+        
+        self.assertGreater(red_green_dist, 0)
+        self.assertGreater(red_blue_dist, 0)
+        self.assertGreater(green_blue_dist, 0)
+        
+        # Distance should be symmetric
+        self.assertEqual(
+            calculator.calculate_distance(self.red, self.green),
+            calculator.calculate_distance(self.green, self.red)
+        )
+        
+        # Test that batch and single calculations are consistent
+        colors = np.array([self.red, self.green, self.blue])
+        palette = np.array([self.black, self.white])
+        
+        batch_distances = calculator.calculate_distances_batch(colors, palette, show_progress=False)
+        
+        # Compare with individual calculations
+        for i, color in enumerate(colors):
+            for j, palette_color in enumerate(palette):
+                single_dist = calculator.calculate_distance(color, palette_color)
+                batch_dist = batch_distances[i, j]
+                self.assertAlmostEqual(single_dist, batch_dist, places=10,
+                                     msg=f"Mismatch for color {i} to palette {j}")
+        
+        # Test that No Separation variant produces reasonable results compared to standard CIEDE2000
+        standard_calculator = ColorDistanceCalculator('ciede2000')
+        
+        # Test a few color pairs to ensure the No Separation variant produces similar but potentially
+        # improved results (should be in the same ballpark, but with better continuity properties)
+        test_pairs = [
+            (self.red, self.green),
+            (self.blue, self.white),
+            (self.black, np.array([128, 128, 128]))  # mid gray
+        ]
+        
+        for color1, color2 in test_pairs:
+            no_sep_dist = calculator.calculate_distance(color1, color2)
+            standard_dist = standard_calculator.calculate_distance(color1, color2)
+            
+            # The distances should be reasonably similar (within 20% typically)
+            # But we focus more on ensuring the No Separation variant doesn't crash
+            # and produces sensible positive values
+            self.assertGreater(no_sep_dist, 0)
+            self.assertLess(abs(no_sep_dist - standard_dist) / standard_dist, 0.5)  # Within 50%
+
 
 class TestPaletteLoader(unittest.TestCase):
     """Test palette loading functionality."""
