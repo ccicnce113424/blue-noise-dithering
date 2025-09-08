@@ -154,38 +154,22 @@ class ColorDistanceCalculator:
         rgb_normalized = rgb_batch / 255.0
         
         if COLOUR_SCIENCE_AVAILABLE:
-            # Use colour-science for accurate conversion
+            # Use colour-science vectorized conversion for maximum performance in tests
             try:
-                # Convert RGB to XYZ then to LAB using colour-science
-                xyz_batch = np.array([colour.RGB_to_XYZ(rgb, 'sRGB') for rgb in rgb_normalized])
-                lab_batch = np.array([colour.XYZ_to_Lab(xyz) for xyz in xyz_batch])
+                xyz_batch = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
+                lab_batch = colour.XYZ_to_Lab(xyz_batch)
                 return lab_batch
             except:
-                # Fallback to single conversions if batch fails
-                return np.array([self._rgb_to_lab(color * 255.0) for color in rgb_normalized])
-        else:
-            # Fallback to colorspacious if colour-science not available
-            try:
-                lab_batch = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
-                return lab_batch
-            except:
-                # Fallback to individual conversions if batch fails
-                return np.array([self._rgb_to_lab(color * 255.0) for color in rgb_normalized])
+                # Fall through to NumPy implementation
+                pass
+        
+        # Use high-performance pure NumPy implementation for production
+        return self._rgb_to_lab_batch_numpy(rgb_batch)
     
     def _rgb_to_lab(self, rgb: np.ndarray) -> np.ndarray:
         """Convert RGB to LAB color space."""
-        # Normalize RGB to 0-1 range
-        rgb_normalized = rgb / 255.0
-        
-        if COLOUR_SCIENCE_AVAILABLE:
-            # Use colour-science for accurate, standards-compliant conversion
-            xyz = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
-            lab = colour.XYZ_to_Lab(xyz)
-            return lab
-        else:
-            # Fallback to colorspacious if colour-science not available
-            lab = colorspacious.cspace_convert(rgb_normalized, "sRGB1", "CIELab")
-            return lab
+        # Use the efficient batch version for single color
+        return self._rgb_to_lab_batch(rgb.reshape(1, 3))[0]
     
     def _cie76_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
         """CIE76 Delta E distance."""
@@ -474,7 +458,64 @@ class ColorDistanceCalculator:
         result = self._ciede2000_standard_chunk_vectorized(lab1_batch, lab2_batch)
         return float(result[0, 0])
     
+    def _rgb_to_lab_batch_numpy(self, rgb_batch: np.ndarray) -> np.ndarray:
+        """Pure NumPy vectorized RGB to LAB conversion fallback.
         
+        This provides a high-performance implementation that matches colour-science
+        RGB_to_XYZ behavior for production use when external libraries aren't available.
+        
+        Args:
+            rgb_batch: Array of RGB colors shape (N, 3) in 0-255 range
+            
+        Returns:
+            Array of LAB colors shape (N, 3)
+        """
+        # For production use, we'll implement a simpler but accurate conversion
+        # that is designed to be consistent rather than perfectly matching
+        # the potentially inconsistent color science library behaviors
+        
+        # Normalize RGB to 0-1 range
+        rgb_normalized = rgb_batch / 255.0
+        
+        # Use the standard sRGB gamma correction that matches sRGB_to_XYZ
+        def srgb_gamma_correction(c):
+            return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+        
+        linear_rgb = srgb_gamma_correction(rgb_normalized)
+        
+        # sRGB to XYZ matrix (matches colour.RGB_COLOURSPACES['sRGB'].matrix_RGB_to_XYZ)
+        rgb_to_xyz = np.array([
+            [0.4124, 0.2126, 0.0193],
+            [0.3576, 0.7152, 0.1192],
+            [0.1805, 0.0722, 0.9505]
+        ])
+        
+        # Convert to XYZ
+        xyz = linear_rgb @ rgb_to_xyz
+        
+        # XYZ to LAB conversion (standard CIE definition)
+        # Reference white D65
+        xn, yn, zn = 0.95047, 1.00000, 1.08883
+        
+        # Normalize by reference white
+        xyz_normalized = xyz / np.array([xn, yn, zn])
+        
+        # f(t) function for LAB conversion
+        def f_lab(t):
+            delta = 6.0/29.0
+            return np.where(t > delta**3, t**(1/3), t / (3 * delta**2) + 4.0/29.0)
+        
+        fx = f_lab(xyz_normalized[:, 0])
+        fy = f_lab(xyz_normalized[:, 1])
+        fz = f_lab(xyz_normalized[:, 2])
+        
+        # Calculate LAB values
+        l = 116 * fy - 16
+        a = 500 * (fx - fy)
+        b = 200 * (fy - fz)
+        
+        return np.column_stack([l, a, b])
+    
     def _rgb_to_oklab_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
         """Convert batch of RGB colors to Oklab color space efficiently.
         
@@ -487,32 +528,53 @@ class ColorDistanceCalculator:
         # Normalize to 0-1
         rgb_normalized = rgb_batch / 255.0
         
+        if COLOUR_SCIENCE_AVAILABLE:
+            # Use colour-science for reference-accurate Oklab conversion
+            try:
+                xyz_batch = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
+                oklab_batch = colour.XYZ_to_Oklab(xyz_batch)
+                return oklab_batch
+            except:
+                # Fallback to manual implementation
+                pass
+        
+        # Manual implementation using correct XYZ→LMS→Oklab transformation
+        # First convert RGB to XYZ using sRGB standard matrices
         # Convert to linear RGB (vectorized)
         def gamma_to_linear(c):
             return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
         
         linear_rgb = gamma_to_linear(rgb_normalized)
         
-        # Matrix multiplication to XYZ-like space
-        m1 = np.array([
-            [0.4122214708, 0.5363325363, 0.0514459929],
-            [0.2119034982, 0.6806995451, 0.1073969566],
-            [0.0883024619, 0.2817188376, 0.6299787005]
+        # sRGB to XYZ matrix (D65 illuminant)
+        rgb_to_xyz = np.array([
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041]
         ])
         
-        lms = linear_rgb @ m1.T
+        xyz = linear_rgb @ rgb_to_xyz.T
+        
+        # XYZ to LMS matrix for Oklab
+        xyz_to_lms = np.array([
+            [0.8189330101, 0.3618667424, -0.1288597137],
+            [0.0329845436, 0.9293118715, 0.0361456387],
+            [0.0482003018, 0.2643662691, 0.6338517070]
+        ])
+        
+        lms = xyz @ xyz_to_lms.T
         
         # Cube root (vectorized)
         lms_cbrt = np.sign(lms) * np.abs(lms) ** (1/3)
         
-        # Second matrix multiplication
-        m2 = np.array([
+        # LMS to Oklab matrix
+        lms_to_oklab = np.array([
             [0.2104542553, 0.7936177850, -0.0040720468],
             [1.9779984951, -2.4285922050, 0.4505937099],
             [0.0259040371, 0.7827717662, -0.8086757660]
         ])
         
-        oklab = lms_cbrt @ m2.T
+        oklab = lms_cbrt @ lms_to_oklab.T
         return oklab
     
     def _rgb_to_oklab(self, rgb: np.ndarray) -> np.ndarray:
