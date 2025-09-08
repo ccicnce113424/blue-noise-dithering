@@ -5,3 +5,6 @@ tqdm>=4.64.0
 PyYAML>=6.0
 scipy>=1.10.0
 scikit-image>=0.21.0
+# External reference libraries for color distance validation
+colormath>=3.0.0
+colour-science>=0.4.6
