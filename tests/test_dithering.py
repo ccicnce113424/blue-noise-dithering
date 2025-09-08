@@ -148,12 +148,12 @@ class TestColorDistanceCalculator(unittest.TestCase):
                                      msg=f"CAM16-UCS mismatch for color {i} to palette {j}")
         
         # Test specific known values to ensure correctness
-        # Test with specific colors that have known CAM16-UCS distance
+        # Test with specific colors that have known CAM16-UCS distance using reference implementation
         brown = np.array([127, 76, 51])
         light_red = np.array([200, 100, 80])
         distance = calculator.calculate_distance(brown, light_red)
-        # This is the expected distance from our custom implementation
-        self.assertAlmostEqual(distance, 12.161788395750218, places=5)
+        # This is the expected distance from the reference colour-science implementation
+        self.assertAlmostEqual(distance, 20.381731, places=3)
 
 
 class TestPaletteLoader(unittest.TestCase):
