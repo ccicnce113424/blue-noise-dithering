@@ -11,7 +11,7 @@ class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'ciede2000_fast', 'oklab', 'hsv', 'compuphase'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'oklab', 'hsv', 'compuphase'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -48,8 +48,6 @@ class ColorDistanceCalculator:
             return self._cie94_distance(color1, color2)
         elif self.method == 'ciede2000':
             return self._ciede2000_distance(color1, color2)
-        elif self.method == 'ciede2000_fast':
-            return self._ciede2000_fast_distance(color1, color2)
         elif self.method == 'oklab':
             return self._oklab_distance(color1, color2)
         elif self.method == 'hsv':
@@ -86,8 +84,6 @@ class ColorDistanceCalculator:
             return self._cie94_distance_batch(colors, palette)
         elif self.method == 'ciede2000':
             return self._ciede2000_distance_batch(colors, palette, show_progress)
-        elif self.method == 'ciede2000_fast':
-            return self._ciede2000_fast_distance_batch(colors, palette, show_progress)
         elif self.method == 'oklab':
             return self._oklab_distance_batch(colors, palette)
         elif self.method == 'hsv':
@@ -191,7 +187,7 @@ class ColorDistanceCalculator:
         return distances
     
     def _cie94_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
-        """CIE94 Delta E distance."""
+        """CIE94 Delta E distance (symmetrized version)."""
         lab1 = self._rgb_to_lab(color1)
         lab2 = self._rgb_to_lab(color2)
         
@@ -212,9 +208,12 @@ class ColorDistanceCalculator:
         k1 = 0.045
         k2 = 0.015
         
+        # Use average chroma for symmetric distance calculation
+        c_ref = (c1 + c2) / 2.0
+        
         sl = 1.0
-        sc = 1.0 + k1 * c1
-        sh = 1.0 + k2 * c1
+        sc = 1.0 + k1 * c_ref
+        sh = 1.0 + k2 * c_ref
         
         delta_e = np.sqrt(
             (delta_l / (kl * sl))**2 +
@@ -257,10 +256,11 @@ class ColorDistanceCalculator:
         k1 = 0.045
         k2 = 0.015
         
-        # Calculate weighting functions
+        # Calculate weighting functions (using average chroma for symmetry)
+        c_ref = (c1 + c2) / 2.0
         sl = 1.0
-        sc = 1.0 + k1 * c1
-        sh = 1.0 + k2 * c1
+        sc = 1.0 + k1 * c_ref
+        sh = 1.0 + k2 * c_ref
         
         # Calculate final CIE94 distance
         delta_e = np.sqrt(
@@ -270,14 +270,6 @@ class ColorDistanceCalculator:
         )
         
         return delta_e
-    
-    def _ciede2000_fast_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
-        """Fast simplified CIEDE2000 Delta E distance."""
-        lab1 = self._rgb_to_lab(color1)
-        lab2 = self._rgb_to_lab(color2)
-        
-        # Use fast vectorized implementation for single color pair
-        return self._ciede2000_fast_single(lab1, lab2)
     
     def _ciede2000_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
         """Standard CIEDE2000 Delta E distance following CIE specification."""
@@ -305,105 +297,6 @@ class ColorDistanceCalculator:
         
         # Use standard CIEDE2000 implementation
         return self._ciede2000_standard_vectorized(colors_lab, palette_lab, show_progress)
-    
-    def _ciede2000_fast_distance_batch(self, colors: np.ndarray, palette: np.ndarray, show_progress: bool = True) -> np.ndarray:
-        """Batch fast CIEDE2000 distance calculation using simplified algorithm."""
-        # Check cache for palette LAB conversion
-        if 'ciede2000_fast_palette' not in self._palette_cache:
-            self._palette_cache['ciede2000_fast_palette'] = self._rgb_to_lab_batch(palette)
-        
-        # Convert colors to LAB
-        colors_lab = self._rgb_to_lab_batch(colors)
-        palette_lab = self._palette_cache['ciede2000_fast_palette']
-        
-        n_colors = len(colors)
-        n_palette = len(palette)
-        
-        if show_progress:
-            print(f"Computing fast CIEDE2000 for {n_colors} colors vs {n_palette} palette colors...")
-        
-        # Use fast vectorized implementation
-        return self._ciede2000_fast_vectorized(colors_lab, palette_lab, show_progress)
-    
-    def _ciede2000_fast_vectorized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
-        """Fast simplified CIEDE2000 implementation (previously used as main implementation)."""
-        n_colors = len(colors_lab)
-        n_palette = len(palette_lab)
-        
-        # Process in parallel chunks for maximum performance
-        chunk_size = min(1000, n_colors)  # Balance memory vs performance
-        distances = np.zeros((n_colors, n_palette))
-        
-        # Only show progress bar if requested (avoid conflicts with main progress bar)
-        with tqdm(total=n_colors, desc="CIEDE2000 Fast", unit="px", disable=not show_progress) as pbar:
-            for start_idx in range(0, n_colors, chunk_size):
-                end_idx = min(start_idx + chunk_size, n_colors)
-                chunk_colors = colors_lab[start_idx:end_idx]
-                
-                # Vectorized calculation for this chunk
-                chunk_distances = self._ciede2000_fast_chunk_vectorized(chunk_colors, palette_lab)
-                distances[start_idx:end_idx] = chunk_distances
-                
-                if show_progress:
-                    pbar.update(end_idx - start_idx)
-        
-        return distances
-    
-    def _ciede2000_fast_chunk_vectorized(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
-        """Vectorized fast CIEDE2000 calculation for a chunk of colors (simplified algorithm)."""
-        n_colors = len(colors)
-        n_palette = len(palette)
-        
-        # Reshape for broadcasting
-        colors_exp = colors[:, np.newaxis, :]  # (n_colors, 1, 3)
-        palette_exp = palette[np.newaxis, :, :]  # (1, n_palette, 3)
-        
-        # Extract L*, a*, b* values
-        L1 = colors_exp[:, :, 0]
-        a1 = colors_exp[:, :, 1]
-        b1 = colors_exp[:, :, 2]
-        
-        L2 = palette_exp[:, :, 0]
-        a2 = palette_exp[:, :, 1]
-        b2 = palette_exp[:, :, 2]
-        
-        # Calculate differences
-        dL = L2 - L1
-        da = a2 - a1
-        db = b2 - b1
-        
-        # Calculate chroma values
-        C1 = np.sqrt(a1**2 + b1**2)
-        C2 = np.sqrt(a2**2 + b2**2)
-        dC = C2 - C1
-        C_avg = (C1 + C2) / 2.0
-        
-        # Calculate hue values (simplified but fast)
-        h1 = np.arctan2(b1, a1)
-        h2 = np.arctan2(b2, a2)
-        
-        # Hue difference calculation (simplified)
-        dh = h2 - h1
-        dh = np.where(dh > np.pi, dh - 2*np.pi, dh)
-        dh = np.where(dh < -np.pi, dh + 2*np.pi, dh)
-        dH = 2 * np.sqrt(C1 * C2) * np.sin(dh / 2)
-        
-        # Average values for weighting
-        L_avg = (L1 + L2) / 2.0
-        
-        # Simplified weighting functions (faster approximation)
-        SL = 1.0 + (0.015 * (L_avg - 50)**2) / np.sqrt(20 + (L_avg - 50)**2)
-        SC = 1.0 + 0.045 * C_avg
-        SH = 1.0 + 0.015 * C_avg
-        
-        # Final CIEDE2000 calculation (simplified but accurate)
-        delta_E = np.sqrt(
-            (dL / SL)**2 + 
-            (dC / SC)**2 + 
-            (dH / SH)**2
-        )
-        
-        return delta_E
     
     def _ciede2000_standard_vectorized(self, colors_lab: np.ndarray, palette_lab: np.ndarray, show_progress: bool = True) -> np.ndarray:
         """Standard CIEDE2000 implementation following CIE specification."""
@@ -555,27 +448,7 @@ class ColorDistanceCalculator:
         result = self._ciede2000_standard_chunk_vectorized(lab1_batch, lab2_batch)
         return float(result[0, 0])
     
-    def _ciede2000_fast_single(self, lab1: np.ndarray, lab2: np.ndarray) -> float:
-        """Fast CIEDE2000 calculation for single color pair."""
-        # Use the vectorized version for single pair
-        lab1_batch = lab1.reshape(1, 3)
-        lab2_batch = lab2.reshape(1, 3)
-        result = self._ciede2000_fast_chunk_vectorized(lab1_batch, lab2_batch)
-        return float(result[0, 0])
-    
-
-    
-
-    
-
-    
-
-
-    
-
-    
-
-    
+        
     def _rgb_to_oklab_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
         """Convert batch of RGB colors to Oklab color space efficiently.
         

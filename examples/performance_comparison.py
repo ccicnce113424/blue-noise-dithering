@@ -100,7 +100,6 @@ def main():
         'weighted_rgb', 
         'hsv',
         'oklab',
-        'ciede2000_fast',
         'cie76',
         'cie94',
         'ciede2000'
@@ -131,7 +130,7 @@ def main():
     
     print("\nRecommendations:")
     print("- For maximum speed: weighted_rgb or rgb")
-    print("- For balanced quality/speed: ciede2000_fast")  
+    print("- For balanced quality/speed: ciede2000")  
     print("- For maximum quality: ciede2000")
     print("- For modern perceptual accuracy: oklab")
     
