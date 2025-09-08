@@ -1,11 +1,11 @@
 # Sample configuration file for blue noise dithering
 
 # Color distance calculation method
-# Available: rgb, weighted_rgb, cie76, cie94, ciede2000, ciede2000_fast, oklab, hsv
-# Recommended: ciede2000_fast (excellent quality with good performance)
-# For speed: weighted_rgb, rgb
-# For maximum quality: ciede2000 (slower)
-color_distance_method: ciede2000_fast
+# Available: rgb, weighted_rgb, cie76, cie94, ciede2000, cam16_ucs, oklab, hsv, compuphase
+# Recommended: weighted_rgb or compuphase (excellent quality with good performance)
+# For speed: weighted_rgb, rgb, compuphase
+# For maximum quality: ciede2000, cam16_ucs (slower)
+color_distance_method: weighted_rgb
 
 # Base noise strength (0.0 to 1.0)
 noise_strength: 0.5

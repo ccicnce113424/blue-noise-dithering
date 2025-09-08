@@ -45,7 +45,7 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_fast_uniform
 python -m blue_noise_dithering.cli examples/test_image.png dithered_optimal.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance ciede2000_fast \
+  --color-distance weighted_rgb \
   --adaptive-strategy gradient_edge
 ```
 
@@ -84,7 +84,7 @@ python -m blue_noise_dithering.cli input.png output.png \
 python -m blue_noise_dithering.cli examples/test_image.png output.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance ciede2000_fast \
+  --color-distance weighted_rgb \
   --adaptive-noise \
   --save-config reusable_settings.yaml
 ```
@@ -96,7 +96,7 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_combo.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
   --adaptive-strategy gradient_edge \
-  --color-distance ciede2000_fast
+  --color-distance weighted_rgb
 ```
 
 ### Example 8: Maximum Detail Preservation
@@ -117,7 +117,7 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png
   --blue-noise examples/blue_noise.png \
   --adaptive-strategy gradient_contrast \
   --output-noise-map noise_visualization.png \
-  --color-distance ciede2000_fast
+  --color-distance weighted_rgb
 ```
 
 ### Example 10: Complete Advanced Configuration
@@ -126,7 +126,7 @@ python -m blue_noise_dithering.cli examples/test_image.png dithered_with_map.png
 python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
   --palette examples/sample_palette.txt \
   --blue-noise examples/blue_noise.png \
-  --color-distance ciede2000_fast \
+  --color-distance weighted_rgb \
   --noise-strength 0.6 \
   --adaptive-strategy all \
   --alpha-method dithering \
@@ -141,10 +141,11 @@ python -m blue_noise_dithering.cli examples/test_image.png final_output.png \
 |--------|-------|---------|------------------|---------------|
 | `rgb` | Fastest | Basic | ~2M+ | Quick tests, draft processing |
 | `weighted_rgb` | Fast | Good | ~1.5M+ | General purpose, recommended default |
-| `ciede2000_fast` | Fast | Excellent | ~780K-1.3M | Balanced speed/quality (recommended) |
+| `compuphase` | Fast | Excellent | ~2.5M+ | Balanced speed/quality (recommended) |
 | `cie76` | Medium | Better | ~500K+ | When color accuracy matters |
 | `cie94` | Medium | Better | ~900K+ | Professional color work |
 | `ciede2000` | Moderate | Best | ~130K-240K | Maximum accuracy requirement |
+| `cam16_ucs` | Moderate | Excellent | ~100K-200K | Perceptually uniform color matching |
 | `oklab` | Medium | Good | ~400K+ | Modern perceptual accuracy |
 | `hsv` | Fast | Fair | ~1M+ | Artistic effects |
 
@@ -191,10 +192,10 @@ This visualization helps understand how the adaptive algorithm is working and ca
 
 ## Performance Tips
 
-1. **Use `ciede2000_fast` for best speed/quality balance** - provides excellent color accuracy with good performance
-2. **For maximum speed, use `weighted_rgb`** - fast and good quality for general use
-3. **For maximum quality, use `ciede2000`** - full standard algorithm for critical applications
-4. **For large images, avoid full `ciede2000` unless quality is absolutely critical**
+1. **Use `compuphase` or `weighted_rgb` for best speed/quality balance** - provides excellent color accuracy with good performance
+2. **For maximum speed, use `weighted_rgb` or `rgb`** - fast and good quality for general use  
+3. **For maximum quality, use `ciede2000` or `cam16_ucs`** - excellent perceptual accuracy for critical applications
+4. **For large images, avoid full `ciede2000` and `cam16_ucs` unless quality is absolutely critical**
 5. **Use smaller blue noise textures (32x32 to 128x128) for better performance**
 6. **Enable adaptive noise for better visual quality with minimal performance impact**
 7. **Process images in batches with the same settings using config files**
