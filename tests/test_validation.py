@@ -255,6 +255,41 @@ class TestColorDistanceValidation(unittest.TestCase):
                 for i, single_dist in enumerate(single_distances):
                     self.assertAlmostEqual(single_dist, batch_distances[i, 0], places=10,
                                          msg=f"{method} batch inconsistency")
+    
+    def test_cam16_ucs_properties(self):
+        """Test CAM16-UCS specific properties."""
+        calculator = ColorDistanceCalculator('cam16_ucs')
+        
+        # Test basic functionality
+        red = np.array([255, 0, 0])
+        green = np.array([0, 255, 0])
+        blue = np.array([0, 0, 255])
+        
+        # Distance should be non-negative
+        distance = calculator.calculate_distance(red, green)
+        self.assertGreaterEqual(distance, 0)
+        
+        # Distance to self should be zero  
+        self.assertAlmostEqual(calculator.calculate_distance(red, red), 0, places=10)
+        
+        # Triangle inequality (approximately - may not be exact due to CAM16-UCS properties)
+        d_rg = calculator.calculate_distance(red, green)
+        d_rb = calculator.calculate_distance(red, blue)
+        d_gb = calculator.calculate_distance(green, blue)
+        
+        # Check triangle inequality holds (with some tolerance for numerical precision)
+        self.assertLessEqual(d_rg, d_rb + d_gb + 1e-10)
+        self.assertLessEqual(d_rb, d_rg + d_gb + 1e-10)
+        self.assertLessEqual(d_gb, d_rg + d_rb + 1e-10)
+        
+        # Test batch consistency
+        colors = np.array([red, green, blue])
+        palette = np.array([red])
+        batch_distances = calculator.calculate_distances_batch(colors, palette, show_progress=False)
+        
+        for i, color in enumerate(colors):
+            single_distance = calculator.calculate_distance(color, palette[0])
+            self.assertAlmostEqual(single_distance, batch_distances[i, 0], places=10)
 
 
 if __name__ == '__main__':
