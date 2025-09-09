@@ -201,7 +201,7 @@ class ColorDistanceCalculator:
         return distances
     
     def _cie94_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
-        """CIE94 Delta E distance (symmetrized version)."""
+        """CIE94 Delta E distance (standard asymmetric version)."""
         lab1 = self._rgb_to_lab(color1)
         lab2 = self._rgb_to_lab(color2)
         
@@ -222,8 +222,8 @@ class ColorDistanceCalculator:
         k1 = 0.045
         k2 = 0.015
         
-        # Use average chroma for symmetric distance calculation
-        c_ref = (c1 + c2) / 2.0
+        # Use reference color (first color) for asymmetric distance calculation
+        c_ref = c1
         
         sl = 1.0
         sc = 1.0 + k1 * c_ref
@@ -238,7 +238,7 @@ class ColorDistanceCalculator:
         return delta_e
     
     def _cie94_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
-        """Batch CIE94 distance calculation with vectorized operations."""
+        """Batch CIE94 distance calculation with vectorized operations (standard asymmetric version)."""
         # Check cache for palette LAB conversion
         if 'cie94_palette' not in self._palette_cache:
             self._palette_cache['cie94_palette'] = self._rgb_to_lab_batch(palette)
@@ -270,8 +270,8 @@ class ColorDistanceCalculator:
         k1 = 0.045
         k2 = 0.015
         
-        # Calculate weighting functions (using average chroma for symmetry)
-        c_ref = (c1 + c2) / 2.0
+        # Calculate weighting functions using reference color (first color) for asymmetric calculation
+        c_ref = c1
         sl = 1.0
         sc = 1.0 + k1 * c_ref
         sh = 1.0 + k2 * c_ref
