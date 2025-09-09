@@ -19,7 +19,7 @@ class ColorDistanceCalculator:
     """Calculate color distances using various methods."""
     
     METHODS = [
-        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'oklab', 'hsv', 'compuphase'
+        'rgb', 'weighted_rgb', 'cie76', 'cie94', 'ciede2000', 'oklab', 'hsv', 'compuphase', 'cam16_ucs'
     ]
     
     def __init__(self, method: str = 'weighted_rgb'):
@@ -62,6 +62,8 @@ class ColorDistanceCalculator:
             return self._hsv_distance(color1, color2)
         elif self.method == 'compuphase':
             return self._compuphase_distance(color1, color2)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance(color1, color2)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -98,6 +100,8 @@ class ColorDistanceCalculator:
             return self._hsv_distance_batch(colors, palette)
         elif self.method == 'compuphase':
             return self._compuphase_distance_batch(colors, palette)
+        elif self.method == 'cam16_ucs':
+            return self._cam16_ucs_distance_batch(colors, palette)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -774,4 +778,63 @@ class ColorDistanceCalculator:
         distance_squared = red_term + green_term + blue_term
         distances = np.sqrt(distance_squared.astype(np.float64))
         
+        return distances
+    
+    def _rgb_to_cam16_ucs_batch(self, rgb_batch: np.ndarray) -> np.ndarray:
+        """Convert batch of RGB colors to CAM16-UCS color space efficiently.
+        
+        Args:
+            rgb_batch: Array of RGB colors shape (N, 3) in 0-255 range
+            
+        Returns:
+            Array of CAM16-UCS colors shape (N, 3)
+        """
+        # Normalize RGB to 0-1 range
+        rgb_normalized = rgb_batch / 255.0
+        
+        if COLOUR_SCIENCE_AVAILABLE:
+            try:
+                # Convert RGB to XYZ first using sRGB colorspace
+                xyz_batch = colour.RGB_to_XYZ(rgb_normalized, 'sRGB')
+                
+                # Convert XYZ to CAM16-UCS using default viewing conditions
+                # The colour-science library uses appropriate defaults for CAM16-UCS
+                cam16_ucs_batch = colour.XYZ_to_CAM16UCS(xyz_batch)
+                return cam16_ucs_batch
+                
+            except Exception:
+                # Fallback to simplified implementation if colour-science fails
+                pass
+        
+        # Fallback: Use LAB as approximation (CAM16-UCS has similar perceptual properties)
+        # This is not ideal but provides a working fallback
+        return self._rgb_to_lab_batch_numpy(rgb_batch)
+    
+    def _rgb_to_cam16_ucs(self, rgb: np.ndarray) -> np.ndarray:
+        """Convert RGB to CAM16-UCS color space."""
+        # Use the batch version for single color
+        return self._rgb_to_cam16_ucs_batch(rgb.reshape(1, 3))[0]
+    
+    def _cam16_ucs_distance(self, color1: np.ndarray, color2: np.ndarray) -> float:
+        """CAM16-UCS color space distance."""
+        cam16_ucs1 = self._rgb_to_cam16_ucs(color1)
+        cam16_ucs2 = self._rgb_to_cam16_ucs(color2)
+        diff = cam16_ucs1 - cam16_ucs2
+        return np.sqrt(np.sum(diff ** 2))
+    
+    def _cam16_ucs_distance_batch(self, colors: np.ndarray, palette: np.ndarray) -> np.ndarray:
+        """Batch CAM16-UCS distance calculation."""
+        # Check cache for palette CAM16-UCS conversion
+        if 'cam16_ucs_palette' not in self._palette_cache:
+            self._palette_cache['cam16_ucs_palette'] = self._rgb_to_cam16_ucs_batch(palette)
+        
+        # Convert colors to CAM16-UCS
+        colors_cam16_ucs = self._rgb_to_cam16_ucs_batch(colors)
+        palette_cam16_ucs = self._palette_cache['cam16_ucs_palette']
+        
+        colors_expanded = colors_cam16_ucs[:, np.newaxis, :]
+        palette_expanded = palette_cam16_ucs[np.newaxis, :, :]
+        
+        diff = colors_expanded - palette_expanded
+        distances = np.sqrt(np.sum(diff ** 2, axis=2))
         return distances

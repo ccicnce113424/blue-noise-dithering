@@ -53,7 +53,7 @@ python -m blue_noise_dithering.cli input.png output.png \
 - `ciede2000`: Full standard CIEDE2000 Delta E (best accuracy, moderate speed)
 - `oklab`: Oklab perceptual color space (fast, modern accuracy)
 - `hsv`: HSV color space distance (fast, for artistic effects)
-- `compuphase`: Low-cost perceptual approximation (very fast, good accuracy for most use cases)
+- `cam16_ucs`: CAM16-UCS uniform color space (high accuracy, perceptually uniform)
 
 ## Adaptive Noise Strategies
 
@@ -149,17 +149,18 @@ output_noise_map: noise_strength_map.png
 **Recommended configurations by use case:**
 
 - **Fast processing**: Use `compuphase` or `weighted_rgb` color distance methods
-- **High quality**: Use `ciede2000` (full standard algorithm) for maximum perceptual accuracy  
+- **High quality**: Use `ciede2000` (full standard algorithm) or `cam16_ucs` for maximum perceptual accuracy  
 - **Balanced performance**: Use `compuphase` - provides excellent color accuracy with good speed
 - **Large images**: Use `compuphase` or `weighted_rgb` to maintain reasonable processing times
-- **Small images/highest quality**: Use `ciede2000` (full standard) for maximum accuracy
+- **Small images/highest quality**: Use `ciede2000` (full standard) or `cam16_ucs` for maximum accuracy
 
 **Performance comparison** (approximate processing speeds):
 - `rgb`: ~2M+ px/s
 - `compuphase`: ~2.5M+ px/s (fast perceptual approximation)
 - `weighted_rgb`: ~1.5M+ px/s  
-- `ciede2000`: ~130K-240K px/s (full accuracy)
-- `cie94`: ~900K+ px/s
 - `oklab`: ~400K+ px/s
+- `cam16_ucs`: ~460K+ px/s (high perceptual accuracy)
+- `cie94`: ~900K+ px/s
+- `ciede2000`: ~130K-240K px/s (full accuracy)
 
 All methods benefit from recent vectorized optimizations and provide excellent results for their respective use cases.

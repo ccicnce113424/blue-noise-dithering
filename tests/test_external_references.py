@@ -355,6 +355,40 @@ class TestExternalReferences(unittest.TestCase):
                         relative_error = abs(single_distance - ref_distance) / max(ref_distance, 1e-6)
                         self.assertLess(relative_error, self.tolerance,
                                        f"{method} should match reference")
+    
+    @unittest.skipUnless(COLOUR_SCIENCE_AVAILABLE, "colour-science not available")
+    def test_cam16_ucs_vs_colour_science(self):
+        """Test CAM16-UCS implementation against colour-science reference."""
+        calculator = ColorDistanceCalculator('cam16_ucs')
+        
+        # Test colors
+        test_colors = [
+            ([255, 0, 0], [0, 255, 0]),     # Red vs Green
+            ([0, 0, 255], [255, 255, 0]),   # Blue vs Yellow  
+            ([128, 128, 128], [64, 64, 64]), # Gray vs Dark Gray
+            ([255, 255, 255], [0, 0, 0]),   # White vs Black
+        ]
+        
+        for (color1, color2) in test_colors:
+            # Our implementation
+            our_distance = calculator.calculate_distance(np.array(color1), np.array(color2))
+            
+            # Direct colour-science calculation
+            rgb1_norm = np.array(color1) / 255.0
+            rgb2_norm = np.array(color2) / 255.0
+            
+            xyz1 = colour.RGB_to_XYZ(rgb1_norm.reshape(1, 3), 'sRGB')[0]
+            xyz2 = colour.RGB_to_XYZ(rgb2_norm.reshape(1, 3), 'sRGB')[0]
+            
+            cam16_ucs1 = colour.XYZ_to_CAM16UCS(xyz1.reshape(1, 3))[0]
+            cam16_ucs2 = colour.XYZ_to_CAM16UCS(xyz2.reshape(1, 3))[0]
+            
+            reference_distance = np.sqrt(np.sum((cam16_ucs1 - cam16_ucs2) ** 2))
+            
+            # Allow small tolerance for numerical differences
+            self.assertAlmostEqual(our_distance, reference_distance, places=6,
+                                 msg=f"CAM16-UCS mismatch for {color1} vs {color2}: "
+                                     f"our={our_distance:.6f}, ref={reference_distance:.6f}")
 
 
 if __name__ == '__main__':
