@@ -46,10 +46,30 @@ class TestColorDistanceValidation(unittest.TestCase):
                         self.assertGreaterEqual(distance, 0.0,
                                               msg=f"Distance should be non-negative for {method}")
                         
-                        # Distance should be symmetric
-                        reverse_distance = calculator.calculate_distance(color2, color1)
-                        self.assertAlmostEqual(distance, reverse_distance, places=10,
-                                             msg=f"Distance should be symmetric for {method}")
+                        # Distance should be symmetric (except for CIE94 which is asymmetric by standard)
+                        if method != 'cie94':
+                            reverse_distance = calculator.calculate_distance(color2, color1)
+                            self.assertAlmostEqual(distance, reverse_distance, places=10,
+                                                 msg=f"Distance should be symmetric for {method}")
+    
+    def test_cie94_asymmetric_behavior(self):
+        """Test that CIE94 exhibits correct asymmetric behavior."""
+        calculator = ColorDistanceCalculator('cie94')
+        
+        # Test with colors that should show clear asymmetric behavior
+        red = np.array([255, 0, 0])
+        green = np.array([0, 255, 0])
+        
+        distance_12 = calculator.calculate_distance(red, green)
+        distance_21 = calculator.calculate_distance(green, red)
+        
+        # CIE94 should be asymmetric
+        self.assertNotAlmostEqual(distance_12, distance_21, places=6,
+                                msg="CIE94 should be asymmetric (standard behavior)")
+        
+        # Both distances should still be positive
+        self.assertGreater(distance_12, 0.0, msg="CIE94 distance should be positive")
+        self.assertGreater(distance_21, 0.0, msg="CIE94 reverse distance should be positive")
     
     def test_batch_consistency(self):
         """Test that batch and single calculations produce identical results."""

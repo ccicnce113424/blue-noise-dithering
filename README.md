@@ -48,7 +48,7 @@ python -m blue_noise_dithering.cli input.png output.png \
 - `rgb`: Standard RGB Euclidean distance (fastest)
 - `weighted_rgb`: Weighted RGB with perceptual weights (fast, recommended for general use)
 - `cie76`: CIE76 Delta E (moderate speed, good accuracy)
-- `cie94`: CIE94 Delta E (moderate speed, better accuracy)
+- `cie94`: CIE94 Delta E (moderate speed, better accuracy, asymmetric by standard)
 - `compuphase`: Low-cost perceptual approximation (very fast, good accuracy for most use cases)
 - `ciede2000`: Full standard CIEDE2000 Delta E (best accuracy, moderate speed)
 - `oklab`: Oklab perceptual color space (fast, modern accuracy)
